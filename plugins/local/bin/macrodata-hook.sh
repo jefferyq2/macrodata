@@ -51,9 +51,9 @@ inject_pending_context() {
 inject_static_context() {
     # For local plugin, we inject identity + state files directly
     local IDENTITY="$STATE_ROOT/identity.md"
-    local INBOX="$STATE_ROOT/state/inbox.md"
     local TODAY="$STATE_ROOT/state/today.md"
-    local COMMITMENTS="$STATE_ROOT/state/commitments.md"
+    local HUMAN="$STATE_ROOT/state/human.md"
+    local WORKSPACE="$STATE_ROOT/state/workspace.md"
     local CONTEXT_FILE="$STATE_ROOT/.claude-context.md"
 
     # Build context content
@@ -74,16 +74,17 @@ State directory: $STATE_ROOT
 
 $(cat "$IDENTITY" 2>/dev/null || echo "_No identity configured_")
 
-## State
+## Today
 
-### Inbox
-$(cat "$INBOX" 2>/dev/null || echo "_Empty_")
-
-### Today
 $(cat "$TODAY" 2>/dev/null || echo "_Empty_")
 
-### Commitments
-$(cat "$COMMITMENTS" 2>/dev/null || echo "_Empty_")
+## Human
+
+$(cat "$HUMAN" 2>/dev/null || echo "_Empty_")
+
+## Workspace
+
+$(cat "$WORKSPACE" 2>/dev/null || echo "_Empty_")
 
 ## Paths
 

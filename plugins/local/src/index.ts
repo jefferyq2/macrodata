@@ -173,9 +173,9 @@ server.tool(
     const context = {
       identity: readFileOrEmpty(identityPath),
       state: {
-        inbox: readFileOrEmpty(join(STATE_DIR, "inbox.md")),
         today: readFileOrEmpty(join(STATE_DIR, "today.md")),
-        commitments: readFileOrEmpty(join(STATE_DIR, "commitments.md")),
+        human: readFileOrEmpty(join(STATE_DIR, "human.md")),
+        workspace: readFileOrEmpty(join(STATE_DIR, "workspace.md")),
       },
       recentJournal: getRecentJournalEntries(5),
       schedules: loadSchedules().schedules,
@@ -197,7 +197,7 @@ server.tool(
           },
           {
             type: "text" as const,
-            text: "\n\n## First Run Setup\n\nThis is a fresh macrodata installation. Please guide the user through identity setup:\n\n1. Ask what they'd like to be called\n2. Ask about their work patterns and preferences\n3. Ask what they're currently working on\n4. Create the identity.md file with their persona\n5. Create initial state files\n\nUse the filesystem tools (Write, Edit) to create files in the paths shown above.",
+            text: "\n\n## First Run Setup\n\nThis is a fresh macrodata installation. Please guide the user through identity setup:\n\n1. Ask what they'd like to be called\n2. Ask about their work patterns and preferences\n3. Ask what they're currently working on\n4. Create the identity.md file with the agent persona\n5. Create state/human.md with the user's profile and preferences\n6. Create state/today.md with current context\n7. Create state/workspace.md with active projects\n\nUse the filesystem tools (Write, Edit) to create files in the paths shown above.",
           },
         ],
       };
