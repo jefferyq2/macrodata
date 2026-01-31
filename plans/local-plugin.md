@@ -39,6 +39,7 @@ A Claude Code plugin that provides durable memory with zero infrastructure. File
 │  │   ├── people/          (*.md per person)        │
 │  │   └── projects/        (*.md per project)       │
 │  ├── journal/             (JSONL, date-partitioned) │
+│  ├── signals/             (raw events for analysis) │
 │  └── .index/              (embeddings cache)        │
 └─────────────────────────────────────────────────────┘
 ```
@@ -144,6 +145,43 @@ interface JournalEntry {
 ```
 
 Entries are stored in date-partitioned JSONL files: `journal/2026-01-31.jsonl`
+
+### Signal Logging
+
+#### `log_signal`
+
+Log events that might matter for later analysis, even if current utility is unclear:
+
+```typescript
+interface Signal {
+  timestamp: string;      // ISO 8601
+  type: string;           // Event type (e.g., "file_edit", "search", "reminder_fired")
+  context?: {
+    file?: string;        // File involved
+    query?: string;       // Search query if relevant
+    trigger?: string;     // What triggered this
+  };
+  raw?: any;              // Arbitrary data for future analysis
+}
+```
+
+Signals are stored in `signals/YYYY-MM-DD.jsonl`. Not indexed for semantic search – they're raw events for potential future analysis (pattern recognition, behavioral insights, debugging).
+
+**Why log signals?**
+
+Tim's VSM insight: you don't know what will matter until later. Logging liberally means you can:
+- Spot patterns in how the agent is used
+- Debug issues after the fact
+- Train future models on actual usage
+- Identify emerging needs before they're explicit
+
+**What to log:**
+- File reads/writes (which files, when)
+- Searches (what queries, what was retrieved)
+- Reminder triggers (what fired, was it useful)
+- Context retrievals (what got injected)
+- Errors and exceptions
+- Session starts/ends
 
 #### `get_recent_journal`
 
@@ -282,7 +320,7 @@ Optional but encouraged:
 
 ## MCP Tool Summary
 
-The plugin provides only 7 MCP tools. Everything else uses Claude Code's built-in FS tools.
+The plugin provides 9 MCP tools. Everything else uses Claude Code's built-in FS tools.
 
 | Tool | Purpose |
 |------|---------|
@@ -294,6 +332,7 @@ The plugin provides only 7 MCP tools. Everything else uses Claude Code's built-i
 | `schedule_once` | Create one-shot reminder |
 | `list_reminders` | List active schedules |
 | `remove_reminder` | Delete a reminder |
+| `log_signal` | Log raw events for future analysis |
 
 **Not MCP tools** (use built-in FS tools):
 - Reading/writing state files → `Read`, `Edit`, `Write`
