@@ -12,11 +12,8 @@ Real-time cloud memory for Claude Code. Streams context updates via WebSocket an
 ### Option 1: Via marketplace (recommended)
 
 ```bash
-# Add the macrodata marketplace from GitHub
-claude plugin marketplace add github:ascorbic/macrodata
-
-# Install the plugin
-claude plugin install macrodata@macrodata --scope user
+/plugin marketplace add ascorbic/macrodata
+/plugin install macrodata-cloud@macrodata
 ```
 
 ### Option 2: Use --plugin-dir flag

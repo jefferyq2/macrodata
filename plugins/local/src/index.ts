@@ -20,7 +20,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { z } from "zod";
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync } from "fs";
 import { homedir } from "os";
-import { join, basename } from "path";
+import { join } from "path";
 import {
   searchMemory as doSearchMemory,
   indexJournalEntry,
@@ -30,7 +30,22 @@ import {
 } from "./indexer.js";
 
 // Configuration
-const STATE_ROOT = process.env.MACRODATA_ROOT || join(homedir(), ".config", "macrodata");
+function getStateRoot(): string {
+  // Check for config file first
+  const configPath = join(homedir(), ".claude", "macrodata.json");
+  if (existsSync(configPath)) {
+    try {
+      const config = JSON.parse(readFileSync(configPath, "utf-8"));
+      if (config.root) return config.root;
+    } catch {
+      // Ignore parse errors
+    }
+  }
+  // Fall back to env var, then default
+  return process.env.MACRODATA_ROOT || join(homedir(), ".config", "macrodata");
+}
+
+const STATE_ROOT = getStateRoot();
 const STATE_DIR = join(STATE_ROOT, "state");
 const ENTITIES_DIR = join(STATE_ROOT, "entities");
 const JOURNAL_DIR = join(STATE_ROOT, "journal");
@@ -130,7 +145,7 @@ function getRecentJournalEntries(count: number): JournalEntry[] {
   if (!existsSync(JOURNAL_DIR)) return entries;
 
   const files = readdirSync(JOURNAL_DIR)
-    .filter((f) => f.endsWith(".jsonl"))
+    .filter((f: string) => f.endsWith(".jsonl"))
     .sort()
     .reverse();
 

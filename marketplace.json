@@ -5,13 +5,19 @@
     "url": "https://mk.gg"
   },
   "metadata": {
-    "description": "Macrodata cloud memory for Claude Code"
+    "description": "Persistent memory for Claude Code"
   },
   "plugins": [
     {
+      "name": "macrodata",
+      "source": "./plugins/local",
+      "description": "Local file-based memory. Zero infrastructure, fully offline, semantic search.",
+      "version": "0.1.0"
+    },
+    {
       "name": "macrodata-cloud",
       "source": "./plugins/cloud",
-      "description": "Cloud memory for Claude Code. Connects to hosted macrodata service.",
+      "description": "Cloud-hosted memory with multi-device sync (WIP).",
       "version": "0.1.0"
     }
   ]

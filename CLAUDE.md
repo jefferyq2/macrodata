@@ -6,17 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```
 macrodata/
-├── plugins/                    # Claude Code plugins
-│   └── cloud/                  # Plugin for cloud macrodata
-│       ├── .claude-plugin/     # Plugin metadata
-│       ├── bin/                # Daemon and hook scripts
-│       └── hooks/              # Plugin hooks config
-├── workers/                    # Cloudflare Workers
-│   └── macrodata/              # Main memory MCP worker
-│       ├── src/                # Worker source code
-│       ├── test/               # Worker tests
-│       ├── wrangler.jsonc      # Wrangler config
-│       └── macrodata.config.ts # User-editable config
+├── plugins/
+│   ├── local/                  # Local file-based memory plugin (primary)
+│   │   ├── .claude-plugin/     # Plugin metadata
+│   │   ├── bin/                # Daemon and hook scripts
+│   │   ├── hooks/              # Plugin hooks config
+│   │   ├── skills/             # Plugin skills (e.g., onboarding)
+│   │   └── src/                # MCP server source
+│   │       ├── index.ts        # MCP server with tool definitions
+│   │       ├── indexer.ts      # Vectra indexing logic
+│   │       └── embeddings.ts   # Transformers.js embeddings
+│   └── cloud/                  # Cloud plugin (WIP)
+│       ├── .claude-plugin/
+│       ├── bin/
+│       └── hooks/
+├── workers/                    # Cloudflare Workers (WIP)
+│   └── macrodata/              # Cloud memory MCP server
 ├── package.json                # Root package.json
 └── marketplace.json            # Plugin marketplace config
 ```
@@ -24,9 +29,9 @@ macrodata/
 ## Build and Development Commands
 
 ```bash
+# Root (for cloud worker)
 pnpm dev            # Start local dev server with wrangler
 pnpm deploy         # Deploy to Cloudflare Workers
-pnpm types          # Regenerate worker-configuration.d.ts
 pnpm check          # Type check with tsc
 pnpm lint           # Run oxlint
 pnpm lint:fix       # Run oxlint with auto-fix
@@ -36,40 +41,27 @@ pnpm test           # Run tests
 
 ## Architecture
 
-Macrodata is memory infrastructure for AI coding agents.
+Macrodata provides persistent memory for AI coding agents. Two modes:
 
-### Workers
+### Local Mode (Primary)
 
-**macrodata** (`workers/macrodata/`) - Cloud memory MCP server on Cloudflare Workers.
+**local** (`plugins/local/`) - File-based memory, fully offline.
 
-- `src/index.ts` - Hono app with OAuth provider
-- `src/mcp-agent.ts` - Durable Object implementing MCP tools
-- `src/models.ts` - AI SDK provider setup
-- `src/config.ts` - Type definitions and `defineConfig` helper
-- `macrodata.config.ts` - User-editable config for models, embedding, OAuth
+- `src/index.ts` - MCP server with 11 tools (get_context, log_journal, search_memory, etc.)
+- `src/indexer.ts` - Vectra-based vector index for semantic search
+- `src/embeddings.ts` - Transformers.js embedding generation (BGE model)
+- `bin/macrodata-daemon.ts` - Background daemon for scheduled reminders
 
-**Key bindings** (in wrangler.jsonc):
+**Storage** (default `~/.config/macrodata/`):
+- `identity.md` - Agent persona
+- `state/` - Current state (human.md, today.md, workspace.md)
+- `entities/` - People, projects as markdown files
+- `journal/` - JSONL entries, date-partitioned
+- `.index/` - Vectra embeddings cache
 
-- `AI` - Workers AI for embeddings and local models
-- `VECTORIZE` - Vector index for semantic search
-- `MCP_OBJECT` - Durable Object for per-user state
-- `OAUTH_KV` - KV namespace for OAuth tokens
+### Cloud Mode (WIP)
 
-### Plugins
+**cloud** (`plugins/cloud/`) - Connects to hosted macrodata service.
+**macrodata** (`workers/macrodata/`) - Cloudflare Worker with Durable Objects.
 
-**cloud** (`plugins/cloud/`) - Plugin that connects Claude Code to hosted macrodata service.
-
-- Starts a daemon that maintains WebSocket connection to macrodata
-- Injects context via hooks on session start and prompt submit
-- Reads OAuth tokens from macOS keychain
-
-## Model Configuration
-
-Models are configured in `workers/macrodata/macrodata.config.ts`:
-
-- `models.fast` - Quick tasks (default: Gemini Flash via AI Gateway)
-- `models.thinking` - Deep reasoning (default: Claude Opus via AI Gateway)
-- `models.local` - Free Workers AI model (default: Kimi K2)
-- `embedding` - Vectorize embedding model (BGE variants)
-
-External models route through AI Gateway's unified provider. Local models use Workers AI directly.
+Cloud mode adds: multi-device sync, web search (Brave), background AI processing, external model routing via AI Gateway. See `workers/macrodata/README.md` for details.

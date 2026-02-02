@@ -1,83 +1,91 @@
 # Macrodata
 
-Memory infrastructure for AI coding agents.
+Memory infrastructure for AI coding agents. Give Claude Code persistent memory across sessions with journal logging, semantic search, and scheduled reminders.
 
-## Structure
+## Quick Start (Local)
 
+The local plugin runs entirely on your machine with no external dependencies.
+
+**Prerequisites:** [Bun](https://bun.sh) runtime
+
+```bash
+/plugin marketplace add ascorbic/macrodata
+/plugin install macrodata@macrodata
 ```
-macrodata/
-├── plugins/              # Claude Code plugins
-│   └── cloud/            # Connect to hosted macrodata service
-└── workers/              # Cloudflare Workers
-    └── macrodata/        # Cloud memory MCP server
-```
+
+On first run, the agent will guide you through setting up your identity and preferences.
 
 ## Features
 
-- **Semantic Memory** - Store and search memories with vector embeddings
-- **Journal** - Append-only log for observations and decisions
-- **Conversation Summaries** - Persist session context across conversations
-- **Scheduled Tasks** - Cron and one-shot reminders via Durable Objects
-- **Web Search** - Brave Search integration
-- **Multi-model Support** - AI Gateway for external models, Workers AI for local
+- **Session Context** - Identity, state, and recent history injected on session start
+- **Journal** - Append-only log for observations, decisions, and learnings
+- **Semantic Search** - Vector search across your journal and entity files using Transformers.js
+- **Scheduled Reminders** - Cron-based recurring and one-shot reminders
+- **Entity Files** - Track people, projects, and other entities as markdown files
 
-## Setup
+## Architecture
 
-### Cloud Worker
+Macrodata has two modes: **local** (file-based, fully offline) and **cloud** (hosted, WIP).
 
-```bash
-pnpm install
-cp workers/macrodata/.dev.vars.example workers/macrodata/.dev.vars
-# Fill in your secrets in .dev.vars
-pnpm dev
+```
+macrodata/
+├── plugins/
+│   ├── local/            # Local file-based memory (recommended)
+│   └── cloud/            # Cloud-hosted memory (WIP)
+└── workers/
+    └── macrodata/        # Cloudflare Worker for cloud mode (WIP)
 ```
 
-### Configuration
+### Local Mode
 
-Edit `workers/macrodata/macrodata.config.ts` to configure models:
+All state stored as markdown/JSONL files in `~/.config/macrodata/`:
 
-```typescript
-import { env } from "cloudflare:workers";
-import { defineConfig } from "./src/config";
-
-export default defineConfig({
-	models: {
-		fast: "google-ai-studio/gemini-2.5-flash",
-		thinking: "anthropic/claude-opus-4-20250514",
-		local: "@cf/moonshotai/kimi-k2-instruct",
-	},
-	embedding: "@cf/baai/bge-base-en-v1.5",
-	oauth: {
-		google: {
-			clientId: env.GOOGLE_CLIENT_ID,
-			clientSecret: env.GOOGLE_CLIENT_SECRET,
-		},
-	},
-});
+```
+~/.config/macrodata/
+├── identity.md           # Agent persona
+├── state/
+│   ├── human.md          # Your profile and preferences
+│   ├── today.md          # Daily focus
+│   └── workspace.md      # Active projects
+├── entities/
+│   ├── people/           # One file per person
+│   └── projects/         # One file per project
+├── journal/              # JSONL, date-partitioned
+└── .index/               # Vectra embeddings index
 ```
 
-### Deployment
+### Cloud Mode (WIP)
 
-```bash
-# Set secrets
-wrangler secret put GOOGLE_CLIENT_ID -c workers/macrodata/wrangler.jsonc
-wrangler secret put GOOGLE_CLIENT_SECRET -c workers/macrodata/wrangler.jsonc
-# ... other secrets from .dev.vars.example
+Cloud mode provides self-hosted multi-device sync, web search, and background AI processing via a Cloudflare Worker. Documentation in `workers/macrodata/` and `plugins/cloud/`.
 
-# Deploy
-pnpm deploy
+## MCP Tools
+
+The local plugin provides these MCP tools:
+
+| Tool | Purpose |
+|------|---------|
+| `get_context` | Session bootstrap - returns identity, state, journal, schedules |
+| `log_journal` | Append timestamped entry (auto-indexed for search) |
+| `get_recent_journal` | Get N most recent entries |
+| `search_memory` | Semantic search across journal and entities |
+| `schedule_reminder` | Create recurring reminder (cron) |
+| `schedule_once` | Create one-shot reminder |
+| `list_reminders` | List active schedules |
+| `remove_reminder` | Delete a reminder |
+
+State and entity files are read/written using Claude Code's built-in filesystem tools.
+
+## Configuration
+
+To use a custom storage directory, create `~/.claude/macrodata.json`:
+
+```json
+{
+  "root": "/path/to/your/macrodata"
+}
 ```
 
-## Plugins
-
-### Cloud Plugin
-
-Install the cloud plugin to connect Claude Code to a hosted macrodata service:
-
-```bash
-claude plugin marketplace add github:ascorbic/macrodata
-claude plugin install macrodata@macrodata-cloud --scope user
-```
+Default location is `~/.config/macrodata`.
 
 ## License
 

@@ -1,5 +1,5 @@
 {
-  "name": "macrodata-local",
+  "name": "macrodata",
   "version": "0.1.0",
   "description": "Local file-based memory for Claude Code. Zero infrastructure, fully offline, optional git tracking.",
   "author": {

@@ -4,24 +4,9 @@ Local file-based memory for Claude Code. Zero infrastructure, fully offline, opt
 
 ## Installation
 
-Add to your Claude Code plugins directory:
-
 ```bash
-cd ~/.claude/plugins
-git clone https://github.com/ascorbic/macrodata
-ln -s macrodata/plugins/local macrodata-local
-```
-
-Or add to your Claude settings:
-
-```json
-{
-  "plugins": [
-    {
-      "path": "/path/to/macrodata/plugins/local"
-    }
-  ]
-}
+/plugin marketplace add ascorbic/macrodata
+/plugin install macrodata@macrodata
 ```
 
 ## What It Does
@@ -78,7 +63,15 @@ The agent will create your identity.md and initial state files.
 
 ## Configuration
 
-Set `MACRODATA_ROOT` environment variable to change the state directory (default: `~/.config/macrodata`).
+To use a custom storage directory, create `~/.claude/macrodata.json`:
+
+```json
+{
+  "root": "/path/to/your/macrodata"
+}
+```
+
+Default location is `~/.config/macrodata`.
 
 ## Daemon
 
