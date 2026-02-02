@@ -21,21 +21,17 @@ macrodata/
 │       ├── bin/
 │       └── hooks/
 ├── workers/                    # Cloudflare Workers (WIP)
-│   └── macrodata/              # Cloud memory MCP server
-├── package.json                # Root package.json
+│   └── macrodata/              # Cloud memory MCP server (has own package.json)
 └── marketplace.json            # Plugin marketplace config
 ```
 
 ## Build and Development Commands
 
 ```bash
-# Root (for cloud worker)
+# Cloud worker (from workers/macrodata/)
 pnpm dev            # Start local dev server with wrangler
 pnpm deploy         # Deploy to Cloudflare Workers
 pnpm check          # Type check with tsc
-pnpm lint           # Run oxlint
-pnpm lint:fix       # Run oxlint with auto-fix
-pnpm format         # Format with oxfmt
 pnpm test           # Run tests
 ```
 
