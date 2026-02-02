@@ -36,50 +36,21 @@ interface Schedule {
   expression: string; // cron expression or ISO datetime
   description: string;
   payload: string;
+  agent?: "opencode" | "claude"; // Which agent to trigger
   model?: string; // Optional model override (e.g., "anthropic/claude-opus-4-5")
   createdAt: string;
-}
-
-type AgentType = "opencode" | "claude" | "none";
-
-/**
- * Detect which agent CLI is available
- */
-function detectAgent(): AgentType {
-  // Check env override first
-  const envAgent = process.env.MACRODATA_AGENT?.toLowerCase();
-  if (envAgent === "opencode" || envAgent === "claude" || envAgent === "none") {
-    return envAgent;
-  }
-
-  // Try to detect available CLI
-  try {
-    const ocResult = spawnSync("which", ["opencode"], { encoding: "utf-8" });
-    if (ocResult.status === 0) {
-      return "opencode";
-    }
-  } catch {}
-
-  try {
-    const ccResult = spawnSync("which", ["claude"], { encoding: "utf-8" });
-    if (ccResult.status === 0) {
-      return "claude";
-    }
-  } catch {}
-
-  return "none";
 }
 
 /**
  * Trigger an agent with a message
  */
 async function triggerAgent(
-  agent: AgentType,
+  agent: "opencode" | "claude" | undefined,
   message: string,
   options: { model?: string; description?: string } = {}
 ): Promise<boolean> {
-  if (agent === "none") {
-    log("No agent configured, skipping trigger");
+  if (!agent) {
+    log("No agent specified in schedule, skipping trigger");
     return false;
   }
 
@@ -184,15 +155,10 @@ class MacrodataLocalDaemon {
   private cronJobs: Map<string, Cron> = new Map();
   private watcher: ReturnType<typeof watch> | null = null;
   private shouldRun = true;
-  private agent: AgentType = "none";
 
   async start() {
     log("Starting macrodata local daemon");
     log(`State root: ${STATE_ROOT}`);
-
-    // Detect agent
-    this.agent = detectAgent();
-    log(`Agent: ${this.agent}`);
 
     // Write PID file
     ensureDirectories();
@@ -271,16 +237,18 @@ class MacrodataLocalDaemon {
     const message = `[macrodata] Reminder: ${schedule.description}\n${schedule.payload}`;
     writePendingContext(message);
 
-    // Trigger the agent
-    const triggered = await triggerAgent(this.agent, schedule.payload, {
+    // Trigger the agent specified in the schedule
+    const triggered = await triggerAgent(schedule.agent, schedule.payload, {
       model: schedule.model,
       description: schedule.description,
     });
 
     if (triggered) {
-      log(`Successfully triggered ${this.agent} for: ${schedule.id}`);
+      log(`Successfully triggered ${schedule.agent} for: ${schedule.id}`);
+    } else if (schedule.agent) {
+      log(`Failed to trigger ${schedule.agent} for: ${schedule.id}`);
     } else {
-      log(`Could not trigger agent for: ${schedule.id} (pending context written)`);
+      log(`No agent specified for: ${schedule.id} (pending context written)`);
     }
   }
 
