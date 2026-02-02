@@ -17,13 +17,19 @@ Local-first, privacy-preserving, and fully offline. All your data stays on your 
 
 ## Quick Start
 
+### Claude Code
+
+```bash
+/plugin marketplace add ascorbic/macrodata
+/plugin install macrodata@macrodata
+```
+
+On first run, the agent will guide you through setting up your identity and preferences.
+
 ### OpenCode
 
 ```bash
-# Install the plugin
 bun add opencode-macrodata
-
-# Or add to opencode.json
 ```
 
 **opencode.json:**
@@ -37,15 +43,6 @@ Set your state directory:
 ```bash
 export MACRODATA_ROOT="$HOME/.config/macrodata"
 ```
-
-### Claude Code
-
-```bash
-/plugin marketplace add ascorbic/macrodata
-/plugin install macrodata@macrodata
-```
-
-On first run, the agent will guide you through setting up your identity and preferences.
 
 ## State Directory
 
@@ -68,17 +65,6 @@ All state stored as markdown/JSONL files:
 ```
 
 ## How It Works
-
-### OpenCode Plugin
-
-The `opencode-macrodata` plugin provides:
-
-| Feature | Implementation |
-|---------|---------------|
-| Context injection | `chat.message` hook - injects identity, today, recent journal on first message |
-| Compaction survival | `experimental.session.compacting` hook - preserves memory during compaction |
-| Auto-journaling | `tool.execute.before` hook - logs git commands and file changes |
-| Memory operations | `macrodata` custom tool with modes: journal, summary, remind, read, list |
 
 ### Claude Code Plugin
 
@@ -103,7 +89,25 @@ The Claude Code plugin provides MCP tools and hooks:
 | `SessionEnd` | Save summary if significant work done |
 | `PostToolUse` | Auto-log git commands and file changes |
 
+### OpenCode Plugin
+
+The `opencode-macrodata` plugin provides:
+
+| Feature | Implementation |
+|---------|---------------|
+| Context injection | `chat.message` hook - injects identity, today, recent journal on first message |
+| Compaction survival | `experimental.session.compacting` hook - preserves memory during compaction |
+| Auto-journaling | `tool.execute.before` hook - logs git commands and file changes |
+| Memory operations | `macrodata` custom tool with modes: journal, search, search_conversations, summary, remind, read, list |
+
 ## Configuration
+
+**Claude Code** - Create `~/.claude/macrodata.json`:
+```json
+{
+  "root": "/path/to/your/state"
+}
+```
 
 **OpenCode** - Create `~/.config/opencode/macrodata.json`:
 ```json
@@ -113,13 +117,6 @@ The Claude Code plugin provides MCP tools and hooks:
 ```
 
 Or set `MACRODATA_ROOT` environment variable.
-
-**Claude Code** - Create `~/.claude/macrodata.json`:
-```json
-{
-  "root": "/path/to/your/state"
-}
-```
 
 Default location: `~/.config/macrodata`
 
@@ -155,7 +152,7 @@ macrodata/
 git clone https://github.com/ascorbic/macrodata
 cd macrodata
 
-# Local plugin
+# Claude Code plugin
 cd plugins/local
 bun install
 bun run start  # Run MCP server
