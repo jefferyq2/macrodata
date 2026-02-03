@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, cpSync, readdirSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
 import { memoryTools } from "./tools.js";
-import { formatContextForPrompt, getStateRoot, storeLastmod, checkFilesChanged } from "./context.js";
+import { formatContextForPrompt, storeLastmod, checkFilesChanged } from "./context.js";
 import { logJournal } from "./journal.js";
 
 /**
@@ -47,9 +47,8 @@ function installSkills(): void {
     // Always update skills (overwrite existing)
     try {
       cpSync(src, dest, { recursive: true });
-      console.error(`[Macrodata] Installed skill: ${skill}`);
-    } catch (err) {
-      console.error(`[Macrodata] Failed to install skill ${skill}: ${String(err)}`);
+    } catch {
+      // Silently fail - non-critical
     }
   }
 }
@@ -57,13 +56,7 @@ function installSkills(): void {
 // Track which sessions have had initial context injected
 const injectedSessions = new Set<string>();
 
-export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
-  const { directory } = ctx;
-  const stateRoot = getStateRoot();
-
-  console.error(`[Macrodata] Plugin initialized for ${directory}`);
-  console.error(`[Macrodata] State root: ${stateRoot}`);
-
+export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
   // Install skills to global config on plugin load
   installSkills();
 
@@ -96,11 +89,6 @@ export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
 
             // Store lastmod after successful injection
             storeLastmod(input.sessionID);
-
-            const reason = isFirstMessage ? "first message" : "state files changed";
-            console.error(
-              `[Macrodata] Injected context (${memoryContext.length} chars, ${reason})`
-            );
           }
         } catch (err) {
           console.error(`[Macrodata] Context injection error: ${String(err)}`);
@@ -115,7 +103,6 @@ export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
 
         if (memoryContext) {
           output.context.push(memoryContext);
-          console.error("[Macrodata] Injected context for compaction");
         }
       } catch (err) {
         console.error(`[Macrodata] Compaction hook error: ${String(err)}`);
