@@ -10,12 +10,43 @@
  * - Metadata: project, branch, timestamp, session
  */
 
-import { readdirSync, readFileSync, existsSync, statSync } from "fs";
+import { readdirSync, readFileSync, existsSync, statSync, writeFileSync, mkdirSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
 import { embed, embedBatch } from "./embeddings.js";
 import { LocalIndex } from "vectra";
 import { getIndexDir } from "./config.js";
+
+// Index state tracking for incremental updates
+interface IndexState {
+  files: Record<string, { mtime: number; exchangeIds: string[] }>;
+  lastUpdate: string;
+}
+
+function getIndexStatePath(): string {
+  return join(getIndexDir(), "conversations-state.json");
+}
+
+function loadIndexState(): IndexState {
+  const statePath = getIndexStatePath();
+  if (existsSync(statePath)) {
+    try {
+      return JSON.parse(readFileSync(statePath, "utf-8"));
+    } catch {
+      // Corrupted state, start fresh
+    }
+  }
+  return { files: {}, lastUpdate: "" };
+}
+
+function saveIndexState(state: IndexState): void {
+  const statePath = getIndexStatePath();
+  const dir = getIndexDir();
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  writeFileSync(statePath, JSON.stringify(state, null, 2));
+}
 
 // Configuration
 const CLAUDE_DIR = join(homedir(), ".claude");
@@ -274,31 +305,31 @@ function parseConversationFile(filePath: string, projectPath: string): Conversat
 /**
  * Scan all Claude project directories for conversation files
  */
-function* scanConversationFiles(): Generator<{ filePath: string; projectPath: string }> {
+function* scanConversationFiles(): Generator<{ filePath: string; projectPath: string; mtime: number }> {
   if (!existsSync(PROJECTS_DIR)) {
     return;
   }
-  
+
   const projectDirs = readdirSync(PROJECTS_DIR);
-  
+
   for (const projectDir of projectDirs) {
     if (projectDir.startsWith(".")) continue;
-    
+
     const projectPath = decodeProjectPath(projectDir);
     const projectFullPath = join(PROJECTS_DIR, projectDir);
-    
+
     if (!statSync(projectFullPath).isDirectory()) continue;
-    
+
     const files = readdirSync(projectFullPath);
-    
+
     for (const file of files) {
       // Skip agent files, only process main conversation files
       if (!file.endsWith(".jsonl") || file.startsWith("agent-")) continue;
-      
-      yield {
-        filePath: join(projectFullPath, file),
-        projectPath,
-      };
+
+      const filePath = join(projectFullPath, file);
+      const mtime = statSync(filePath).mtimeMs;
+
+      yield { filePath, projectPath, mtime };
     }
   }
 }
@@ -307,33 +338,38 @@ function* scanConversationFiles(): Generator<{ filePath: string; projectPath: st
  * Rebuild the conversation index from scratch
  */
 export async function rebuildConversationIndex(): Promise<{ exchangeCount: number }> {
-  console.error("[Conversations] Starting conversation index rebuild...");
+  console.error("[Conversations] Starting full index rebuild...");
   const startTime = Date.now();
-  
+
   const allExchanges: ConversationExchange[] = [];
-  
-  for (const { filePath, projectPath } of scanConversationFiles()) {
+  const newState: IndexState = { files: {}, lastUpdate: new Date().toISOString() };
+
+  for (const { filePath, projectPath, mtime } of scanConversationFiles()) {
     const exchanges = parseConversationFile(filePath, projectPath);
     allExchanges.push(...exchanges);
+    newState.files[filePath] = {
+      mtime,
+      exchangeIds: exchanges.map(e => e.id),
+    };
   }
-  
+
   console.error(`[Conversations] Found ${allExchanges.length} exchanges`);
-  
+
   if (allExchanges.length === 0) {
+    saveIndexState(newState);
     return { exchangeCount: 0 };
   }
-  
+
   // Create embeddings for all exchanges
-  // Embedding text = project + branch + user prompt (intent-focused)
-  const texts = allExchanges.map(e => 
+  const texts = allExchanges.map(e =>
     `${e.project}${e.branch ? ` (${e.branch})` : ""}: ${e.userPrompt}`
   );
-  
+
   console.error(`[Conversations] Generating embeddings...`);
   const vectors = await embedBatch(texts);
-  
+
   const idx = await getConversationIndex();
-  
+
   // Index all exchanges
   for (let i = 0; i < allExchanges.length; i++) {
     const exchange = allExchanges[i];
@@ -353,11 +389,99 @@ export async function rebuildConversationIndex(): Promise<{ exchangeCount: numbe
       },
     });
   }
-  
+
+  saveIndexState(newState);
+
   const duration = Date.now() - startTime;
-  console.error(`[Conversations] Index rebuild complete in ${duration}ms`);
-  
+  console.error(`[Conversations] Full rebuild complete in ${duration}ms`);
+
   return { exchangeCount: allExchanges.length };
+}
+
+/**
+ * Incrementally update the conversation index (only changed files)
+ */
+export async function updateConversationIndex(): Promise<{ exchangeCount: number; filesUpdated: number; skipped: number }> {
+  console.error("[Conversations] Starting incremental update...");
+  const startTime = Date.now();
+
+  const state = loadIndexState();
+  const idx = await getConversationIndex();
+
+  // Check if index exists - if not, do full rebuild
+  if (!(await idx.isIndexCreated())) {
+    console.error("[Conversations] No existing index, doing full rebuild");
+    const result = await rebuildConversationIndex();
+    return { exchangeCount: result.exchangeCount, filesUpdated: 0, skipped: 0 };
+  }
+
+  let filesUpdated = 0;
+  let skipped = 0;
+  let totalExchanges = 0;
+  const currentFiles = new Set<string>();
+
+  for (const { filePath, projectPath, mtime } of scanConversationFiles()) {
+    currentFiles.add(filePath);
+    const cached = state.files[filePath];
+
+    // Skip if file hasn't changed
+    if (cached && cached.mtime === mtime) {
+      skipped++;
+      totalExchanges += cached.exchangeIds.length;
+      continue;
+    }
+
+    // File is new or modified - parse and index
+    const exchanges = parseConversationFile(filePath, projectPath);
+
+    if (exchanges.length > 0) {
+      const texts = exchanges.map(e =>
+        `${e.project}${e.branch ? ` (${e.branch})` : ""}: ${e.userPrompt}`
+      );
+      const vectors = await embedBatch(texts);
+
+      for (let i = 0; i < exchanges.length; i++) {
+        const exchange = exchanges[i];
+        await idx.upsertItem({
+          id: exchange.id,
+          vector: vectors[i],
+          metadata: {
+            userPrompt: exchange.userPrompt,
+            assistantSummary: exchange.assistantSummary,
+            project: exchange.project,
+            projectPath: exchange.projectPath,
+            branch: exchange.branch || "",
+            timestamp: exchange.timestamp,
+            sessionId: exchange.sessionId,
+            sessionPath: exchange.sessionPath,
+            messageUuid: exchange.messageUuid,
+          },
+        });
+      }
+    }
+
+    state.files[filePath] = {
+      mtime,
+      exchangeIds: exchanges.map(e => e.id),
+    };
+    filesUpdated++;
+    totalExchanges += exchanges.length;
+  }
+
+  // Clean up deleted files from state (but don't remove from index - they may still be useful)
+  for (const filePath of Object.keys(state.files)) {
+    if (!currentFiles.has(filePath)) {
+      delete state.files[filePath];
+    }
+  }
+
+  state.lastUpdate = new Date().toISOString();
+  saveIndexState(state);
+
+  const duration = Date.now() - startTime;
+  console.error(`[Conversations] Incremental update complete in ${duration}ms (${filesUpdated} files updated, ${skipped} skipped)`);
+
+  return { exchangeCount: totalExchanges, filesUpdated, skipped };
 }
 
 /**

@@ -16,14 +16,17 @@
 import { watch } from "chokidar";
 import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync } from "fs";
 import { join, basename, relative } from "path";
+import { homedir } from "os";
 import { Cron } from "croner";
 import { spawn, spawnSync } from "child_process";
 import { indexEntityFile, preloadModel } from "../src/indexer.js";
 import { getStateRoot, getEntitiesDir, getJournalDir, getIndexDir, getSchedulesFile } from "../src/config.js";
 
-// Daemon-specific path helpers (dynamic)
+// Daemon-specific path helpers
+const DAEMON_DIR = join(homedir(), ".config", "macrodata");
+
 function getPidFile() {
-  return join(getStateRoot(), ".daemon.pid");
+  return join(DAEMON_DIR, ".daemon.pid");
 }
 
 function getPendingContext() {
@@ -124,7 +127,7 @@ function writePendingContext(message: string) {
 
 function ensureDirectories() {
   const entitiesDir = getEntitiesDir();
-  const dirs = [getStateRoot(), getIndexDir(), entitiesDir, getJournalDir(), join(entitiesDir, "people"), join(entitiesDir, "projects")];
+  const dirs = [DAEMON_DIR, getStateRoot(), getIndexDir(), entitiesDir, getJournalDir(), join(entitiesDir, "people"), join(entitiesDir, "projects")];
   for (const dir of dirs) {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -156,15 +159,30 @@ function saveSchedules(store: ScheduleStore) {
 class MacrodataLocalDaemon {
   private cronJobs: Map<string, Cron> = new Map();
   private watcher: ReturnType<typeof watch> | null = null;
+  private schedulesWatcher: ReturnType<typeof watch> | null = null;
   private shouldRun = true;
 
   async start() {
     log("Starting macrodata local daemon");
     log(`State root: ${getStateRoot()}`);
 
-    // Write PID file
+    // Check if already running
     ensureDirectories();
-    writeFileSync(getPidFile(), process.pid.toString());
+    const pidFile = getPidFile();
+    if (existsSync(pidFile)) {
+      const existingPid = readFileSync(pidFile, "utf-8").trim();
+      try {
+        process.kill(parseInt(existingPid, 10), 0); // Check if process exists
+        log(`Daemon already running (PID ${existingPid}), exiting`);
+        process.exit(0);
+      } catch {
+        // Process doesn't exist, stale PID file - continue startup
+        log(`Removing stale PID file (was ${existingPid})`);
+      }
+    }
+
+    // Write PID file
+    writeFileSync(pidFile, process.pid.toString());
 
     // Set up signal handlers
     process.on("SIGTERM", () => this.shutdown());
@@ -178,11 +196,71 @@ class MacrodataLocalDaemon {
     // Load and start schedules
     this.loadAndStartSchedules();
 
+    // Watch for schedule changes
+    this.watchSchedulesFile();
+
     // Start file watcher for entity changes
     this.startFileWatcher();
 
     // Keep process alive
     log("Daemon running");
+  }
+
+  private watchSchedulesFile() {
+    const schedulesFile = getSchedulesFile();
+    this.schedulesWatcher = watch(schedulesFile, {
+      ignoreInitial: true,
+      awaitWriteFinish: { stabilityThreshold: 100 },
+    });
+
+    this.schedulesWatcher.on("change", () => {
+      log("Schedules file changed, reloading...");
+      this.reloadSchedules();
+    });
+
+    this.schedulesWatcher.on("add", () => {
+      log("Schedules file created, loading...");
+      this.reloadSchedules();
+    });
+  }
+
+  private reloadSchedules() {
+    const store = loadSchedules();
+    const now = Date.now();
+    const currentIds = new Set(this.cronJobs.keys());
+
+    for (const schedule of store.schedules) {
+      // Skip if already running
+      if (currentIds.has(schedule.id)) {
+        currentIds.delete(schedule.id);
+        continue;
+      }
+
+      if (schedule.type === "cron") {
+        this.startCronJob(schedule);
+      } else if (schedule.type === "once") {
+        const fireTime = new Date(schedule.expression).getTime();
+        if (fireTime > now) {
+          this.startOnceJob(schedule);
+        } else {
+          log(`Skipping expired one-shot: ${schedule.id}`);
+          this.removeSchedule(schedule.id);
+        }
+      }
+    }
+
+    // Stop jobs that were removed from the file
+    const storeIds = new Set(store.schedules.map(s => s.id));
+    for (const id of currentIds) {
+      if (!storeIds.has(id)) {
+        const job = this.cronJobs.get(id);
+        if (job) {
+          job.stop();
+          this.cronJobs.delete(id);
+          log(`Stopped removed job: ${id}`);
+        }
+      }
+    }
   }
 
   private loadAndStartSchedules() {
@@ -346,10 +424,14 @@ class MacrodataLocalDaemon {
     }
     this.cronJobs.clear();
 
-    // Stop file watcher
+    // Stop file watchers
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;
+    }
+    if (this.schedulesWatcher) {
+      this.schedulesWatcher.close();
+      this.schedulesWatcher = null;
     }
 
     // Clean up PID file

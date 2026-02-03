@@ -29,8 +29,7 @@ is_daemon_running() {
 
 start_daemon() {
     if ! is_daemon_running; then
-        # Use Claude Code's bundled Bun if available, otherwise fall back to global
-        local BUN="${CLAUDE_CODE_BUN_PATH:-bun}"
+        local BUN="bun"
         # Start daemon in background, redirect output to log
         nohup "$BUN" run "$DAEMON" >> "$LOGFILE" 2>&1 &
         echo $! > "$PIDFILE"

@@ -31,6 +31,7 @@ import {
   searchConversations,
   expandConversation,
   rebuildConversationIndex,
+  updateConversationIndex,
   getConversationIndexStats,
 } from "./conversations.js";
 import {
@@ -294,12 +295,12 @@ server.tool(
   "Manage search indexes. Target 'memory' for journal/entities, 'conversations' for past Claude Code sessions.",
   {
     target: z.enum(["memory", "conversations"]).describe("Which index to manage"),
-    action: z.enum(["rebuild", "stats"]).describe("'rebuild' to reindex from scratch, 'stats' to get counts"),
+    action: z.enum(["rebuild", "update", "stats"]).describe("'rebuild' to reindex from scratch, 'update' for incremental (conversations only), 'stats' to get counts"),
   },
   async ({ target, action }) => {
     try {
       if (target === "memory") {
-        if (action === "rebuild") {
+        if (action === "rebuild" || action === "update") {
           const result = await rebuildIndex();
           return {
             content: [{ type: "text" as const, text: `Memory index rebuilt. Indexed ${result.itemCount} items.` }],
@@ -314,7 +315,12 @@ server.tool(
         if (action === "rebuild") {
           const result = await rebuildConversationIndex();
           return {
-            content: [{ type: "text" as const, text: `Conversation index rebuilt. Indexed ${result.exchangeCount} exchanges.` }],
+            content: [{ type: "text" as const, text: `Conversation index rebuilt from scratch. Indexed ${result.exchangeCount} exchanges.` }],
+          };
+        } else if (action === "update") {
+          const result = await updateConversationIndex();
+          return {
+            content: [{ type: "text" as const, text: `Conversation index updated. ${result.filesUpdated} files updated, ${result.skipped} skipped. Total: ${result.exchangeCount} exchanges.` }],
           };
         } else {
           const stats = await getConversationIndexStats();
@@ -518,7 +524,7 @@ server.tool(
           content: [
             {
               type: "text" as const,
-              text: "No matching conversations found. Try manage_index(target: 'conversations', action: 'rebuild').",
+              text: "No matching conversations found. Try manage_index(target: 'conversations', action: 'update').",
             },
           ],
         };

@@ -24,7 +24,7 @@ A Claude Code plugin that provides durable memory with zero infrastructure. File
 │  - Scheduled tasks (cron-style reminders)           │
 │  - Watches for changes                              │
 │  - Can trigger Claude Code via CLI                  │
-│  - Uses CLAUDE_CODE_BUN_PATH for Bun runtime        │
+│  - Runs via Bun runtime                             │
 └─────────────────────────────────────────────────────┘
          │
          ▼ reads/writes
