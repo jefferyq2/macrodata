@@ -11,10 +11,11 @@
     },
     "plugins/macrodata": {
       "name": "@macrodata/opencode",
-      "version": "0.1.0",
+      "version": "0.0.0",
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.1.0",
         "@opencode-ai/plugin": "^1.0.162",
+        "@opencode-ai/sdk": "^1.1.49",
         "@xenova/transformers": "^2.17.2",
         "chokidar": "^4.0.3",
         "croner": "^9.0.0",
