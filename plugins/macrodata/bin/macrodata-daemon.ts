@@ -21,7 +21,8 @@ import { Cron } from "croner";
 import { spawn, execSync } from "child_process";
 import { indexEntityFile, preloadModel } from "../src/indexer.js";
 import { getStateRoot, getEntitiesDir, getJournalDir, getIndexDir, getRemindersDir } from "../src/config.js";
-import { updateConversationIndex } from "../opencode/conversations.js";
+import { updateConversationIndex as updateOpenCodeConversations } from "../opencode/conversations.js";
+import { updateConversationIndex as updateClaudeCodeConversations } from "../src/conversations.js";
 
 /**
  * Find an executable in PATH
@@ -166,6 +167,28 @@ function ensureDirectories() {
   }
 }
 
+async function updateAllConversationIndexes() {
+  // Update Claude Code conversations
+  try {
+    const claude = await updateClaudeCodeConversations();
+    if (claude.filesUpdated > 0) {
+      log(`Claude Code conversations: +${claude.filesUpdated} files (${claude.exchangeCount} total)`);
+    }
+  } catch (err) {
+    logError(`Claude Code conversation index failed: ${err}`);
+  }
+
+  // Update OpenCode conversations
+  try {
+    const opencode = await updateOpenCodeConversations();
+    if (opencode.newCount > 0) {
+      log(`OpenCode conversations: +${opencode.newCount} (${opencode.totalCount} total)`);
+    }
+  } catch (err) {
+    logError(`OpenCode conversation index failed: ${err}`);
+  }
+}
+
 function loadAllSchedules(): Schedule[] {
   const remindersDir = getRemindersDir();
   const schedules: Schedule[] = [];
@@ -247,17 +270,12 @@ class MacrodataLocalDaemon {
     process.on("SIGINT", () => this.shutdown());
     process.on("SIGHUP", () => this.reload());
 
-    // Preload embedding model and update conversation index in background
+    // Preload embedding model and update conversation indexes in background
     preloadModel()
       .then(() => {
         log("Embedding model preloaded");
-        // After model is loaded, incrementally update conversation index
-        return updateConversationIndex();
-      })
-      .then((result) => {
-        if (result.newCount > 0) {
-          log(`Conversation index updated: +${result.newCount} (total: ${result.totalCount})`);
-        }
+        // After model is loaded, incrementally update both conversation indexes
+        return updateAllConversationIndexes();
       })
       .catch((err) => logError(`Failed to preload/index: ${err}`));
 
