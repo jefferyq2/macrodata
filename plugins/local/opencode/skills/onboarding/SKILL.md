@@ -16,20 +16,27 @@ Guide new users through initial macrodata setup.
 
 ## Onboarding Flow
 
-### Phase 1: Location
+### Phase 1: Detect User Info
 
-First, check which directories exist:
+Run the detection script once to gather all system info (single permission prompt):
 
 ```bash
-# Check for common code directories
-ls -d ~/Repos ~/repos ~/Code ~/code ~/Projects ~/projects ~/Developer ~/dev 2>/dev/null
+./bin/detect-user.sh
 ```
+
+This returns JSON with:
+- `username`, `fullName`, `timezone`
+- `git.name`, `git.email`
+- `github.login`, `github.name`, `github.blog`, `github.bio`
+- `codeDirs` - array of existing code directories
+
+### Phase 2: Location
 
 Offer location options. Always include:
 - `~/Documents/macrodata` - easy to find
 - `~/.config/macrodata` - hidden, default
 
-Only include a code directory option (e.g. `~/Code/macrodata`) if one was detected above.
+Only include a code directory option if `codeDirs` from the detection was non-empty.
 
 If they choose a non-default location, write the config to `~/.config/opencode/macrodata.json`:
 
@@ -46,26 +53,9 @@ Then create the directory structure:
 - `<root>/entities/projects/`
 - `<root>/topics/`
 
-### Phase 2: Human Profile
+### Phase 3: Human Profile
 
-Gather information about the user. Start by detecting what you can from the system:
-
-**Auto-detect from system:**
-```bash
-# Get system username and full name
-whoami
-id -F 2>/dev/null || getent passwd $(whoami) | cut -d: -f5 | cut -d, -f1
-
-# Timezone
-cat /etc/timezone 2>/dev/null || readlink /etc/localtime | sed 's|.*/zoneinfo/||'
-
-# Git config (name, email)
-git config --global user.name
-git config --global user.email
-
-# GitHub CLI (if authenticated)
-gh api user --jq '.login, .name, .blog' 2>/dev/null
-```
+Use the info from the detection script to pre-populate.
 
 **Ask the basics:**
 - What should I call you? (confirm or correct auto-detected name)
@@ -146,7 +136,7 @@ Write findings to `state/human.md`:
 - [empty initially]
 ```
 
-### Phase 3: Agent Identity
+### Phase 4: Agent Identity
 
 Help define who the agent should be:
 
@@ -176,7 +166,7 @@ Write to `identity.md`:
 - [behavioral pattern 2]
 ```
 
-### Phase 4: Initial Workspace
+### Phase 5: Initial Workspace
 
 Set up working context:
 
@@ -205,7 +195,7 @@ Set up working context:
 - [things in progress]
 ```
 
-### Phase 5: Scheduled Reminders
+### Phase 6: Scheduled Reminders
 
 Offer optional scheduled reminders. These run in the background with no user interaction.
 
@@ -242,7 +232,7 @@ Dreamtime:
 - payload: Run the dreamtime skill.
 ```
 
-### Phase 6: Finalize
+### Phase 7: Finalize
 
 1. Rebuild the memory index with `manage_index`
 2. Log completion to journal
