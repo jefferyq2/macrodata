@@ -26,7 +26,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/ascorbic/macrodata",
-    "directory": "plugins/local/opencode"
+    "directory": "plugins/macrodata/opencode"
   },
   "homepage": "https://github.com/ascorbic/macrodata#readme",
   "bugs": {

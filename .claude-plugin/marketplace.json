@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "macrodata",
-      "source": "./plugins/local",
+      "source": "./plugins/macrodata",
       "description": "Local file-based memory. Zero infrastructure, fully offline, semantic search.",
       "version": "0.1.0"
     }

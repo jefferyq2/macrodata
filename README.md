@@ -138,12 +138,12 @@ git clone https://github.com/ascorbic/macrodata
 cd macrodata
 
 # Claude Code plugin
-cd plugins/local
+cd plugins/macrodata
 bun install
 bun run start  # Run MCP server
 
 # OpenCode plugin
-cd plugins/local/opencode
+cd plugins/macrodata/opencode
 bun install
 bun run build
 ```

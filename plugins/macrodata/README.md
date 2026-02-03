@@ -127,7 +127,7 @@ The daemon is automatically started by the hook script on session start.
 ## Development
 
 ```bash
-cd plugins/local
+cd plugins/macrodata
 bun install
 
 # Run MCP server

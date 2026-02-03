@@ -21,7 +21,7 @@ macrodata/
 ## Build and Development Commands
 
 ```bash
-# From plugins/local/
+# From plugins/macrodata/
 bun install
 bun run start       # Run MCP server
 ```
@@ -30,7 +30,7 @@ bun run start       # Run MCP server
 
 Macrodata provides persistent memory for AI coding agents. File-based, fully offline.
 
-**Source** (`plugins/local/`):
+**Source** (`plugins/macrodata/`):
 - `src/index.ts` - MCP server with 11 tools (log_journal, search_memory, etc.)
 - `src/indexer.ts` - Vectra-based vector index for semantic search
 - `src/embeddings.ts` - Transformers.js embedding generation (BGE model)

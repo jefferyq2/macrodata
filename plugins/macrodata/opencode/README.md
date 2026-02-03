@@ -129,7 +129,7 @@ macrodata mode:rebuild_index
 ## Development
 
 ```bash
-cd plugins/local/opencode
+cd plugins/macrodata/opencode
 bun install
 bun run build
 ```
@@ -137,7 +137,7 @@ bun run build
 Test locally by adding to opencode.json:
 ```json
 {
-  "plugin": ["file:///path/to/macrodata/plugins/local/opencode"]
+  "plugin": ["file:///path/to/macrodata/plugins/macrodata/opencode"]
 }
 ```
 
