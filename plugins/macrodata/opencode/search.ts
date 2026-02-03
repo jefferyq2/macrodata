@@ -9,6 +9,7 @@ import { pipeline, type FeatureExtractionPipeline } from "@xenova/transformers";
 import { existsSync, readFileSync, readdirSync, mkdirSync } from "fs";
 import { join } from "path";
 import { getStateRoot } from "./context.js";
+import { logger } from "./logger.js";
 
 // Embedding pipeline singleton
 let embeddingPipeline: FeatureExtractionPipeline | null = null;
@@ -27,7 +28,7 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
 
   try {
     embeddingPipeline = await pipelineLoading;
-    console.log("[Macrodata] Model loaded successfully");
+    logger.log("Model loaded successfully");
     return embeddingPipeline;
   } finally {
     pipelineLoading = null;
@@ -78,7 +79,7 @@ async function getMemoryIndex(): Promise<LocalIndex> {
   memoryIndex = new LocalIndex(indexPath);
 
   if (!(await memoryIndex.isIndexCreated())) {
-    console.log("[Macrodata] Creating new memory index...");
+    logger.log("Creating new memory index...");
     await memoryIndex.createIndex();
   }
 
@@ -146,7 +147,7 @@ export async function searchMemory(
  * Rebuild memory index from journal and entity files
  */
 export async function rebuildMemoryIndex(): Promise<{ itemCount: number }> {
-  console.log("[Macrodata] Rebuilding memory index...");
+  logger.log("Rebuilding memory index...");
   const startTime = Date.now();
   const stateRoot = getStateRoot();
 
@@ -264,7 +265,7 @@ export async function rebuildMemoryIndex(): Promise<{ itemCount: number }> {
   }
 
   // Generate embeddings
-  console.log(`[Macrodata] Generating embeddings for ${allItems.length} items...`);
+  logger.log(`Generating embeddings for ${allItems.length} items...`);
   const vectors = await embedBatch(allItems.map((i) => i.content));
 
   // Index all items
@@ -287,7 +288,7 @@ export async function rebuildMemoryIndex(): Promise<{ itemCount: number }> {
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[Macrodata] Index rebuilt in ${duration}ms`);
+  logger.log(`Index rebuilt in ${duration}ms`);
 
   return { itemCount: allItems.length };
 }

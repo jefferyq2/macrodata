@@ -25,6 +25,7 @@ import {
   rebuildConversationIndex,
   getConversationIndexStats,
 } from "./conversations.js";
+import { logger } from "./logger.js";
 
 interface Schedule {
   id: string;
@@ -252,8 +253,8 @@ export const rebuildMemoryIndexTool = tool({
 
     // Rebuild conversation index in background (slow - thousands of exchanges)
     rebuildConversationIndex()
-      .then((result) => console.log(`[Macrodata] Conversation index rebuilt: ${result.exchangeCount} exchanges`))
-      .catch((err) => console.error(`[Macrodata] Conversation index rebuild failed: ${err}`));
+      .then((result) => logger.log(`Conversation index rebuilt: ${result.exchangeCount} exchanges`))
+      .catch((err) => logger.error(`Conversation index rebuild failed: ${err}`));
 
     return JSON.stringify({
       success: true,

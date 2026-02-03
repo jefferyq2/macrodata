@@ -14,6 +14,7 @@ import { homedir } from "os";
 import { LocalIndex } from "vectra";
 import { pipeline, type FeatureExtractionPipeline } from "@xenova/transformers";
 import { getStateRoot } from "./context.js";
+import { logger } from "./logger.js";
 
 const OPENCODE_STORAGE = join(homedir(), ".local", "share", "opencode", "storage");
 const EMBEDDING_DIMENSIONS = 384;
@@ -82,7 +83,7 @@ async function getConversationIndex(): Promise<LocalIndex> {
   convIndex = new LocalIndex(indexPath);
 
   if (!(await convIndex.isIndexCreated())) {
-    console.log("[Macrodata] Creating new conversation index...");
+    logger.log("Creating new conversation index...");
     await convIndex.createIndex();
   }
 
@@ -249,7 +250,7 @@ function* scanExchanges(): Generator<ConversationExchange> {
  * Rebuild conversation index
  */
 export async function rebuildConversationIndex(): Promise<{ exchangeCount: number }> {
-  console.log("[Macrodata] Rebuilding OpenCode conversation index...");
+  logger.log("Rebuilding OpenCode conversation index...");
   const startTime = Date.now();
 
   const exchanges: ConversationExchange[] = [];
@@ -257,7 +258,7 @@ export async function rebuildConversationIndex(): Promise<{ exchangeCount: numbe
     exchanges.push(exchange);
   }
 
-  console.log(`[Macrodata] Found ${exchanges.length} exchanges`);
+  logger.log(`Found ${exchanges.length} exchanges`);
 
   if (exchanges.length === 0) {
     return { exchangeCount: 0 };
@@ -265,7 +266,7 @@ export async function rebuildConversationIndex(): Promise<{ exchangeCount: numbe
 
   // Embed user prompts (what we search on)
   const texts = exchanges.map((e) => e.userPrompt);
-  console.log(`[Macrodata] Generating embeddings...`);
+  logger.log("Generating embeddings...");
   const vectors = await embedBatch(texts);
 
   const idx = await getConversationIndex();
@@ -288,7 +289,7 @@ export async function rebuildConversationIndex(): Promise<{ exchangeCount: numbe
   }
 
   const duration = Date.now() - startTime;
-  console.log(`[Macrodata] Conversation index rebuilt in ${duration}ms`);
+  logger.log(`Conversation index rebuilt in ${duration}ms`);
 
   return { exchangeCount: exchanges.length };
 }
@@ -382,7 +383,7 @@ export async function getConversationIndexStats(): Promise<{ exchangeCount: numb
  * Incrementally update conversation index (only new exchanges)
  */
 export async function updateConversationIndex(): Promise<{ newCount: number; totalCount: number }> {
-  console.log("[Macrodata] Updating OpenCode conversation index...");
+  logger.log("Updating OpenCode conversation index...");
   const startTime = Date.now();
 
   const idx = await getConversationIndex();
@@ -397,7 +398,7 @@ export async function updateConversationIndex(): Promise<{ newCount: number; tot
     }
   }
 
-  console.log(`[Macrodata] Found ${newExchanges.length} new exchanges (${existingIds.size} already indexed)`);
+  logger.log(`Found ${newExchanges.length} new exchanges (${existingIds.size} already indexed)`);
 
   if (newExchanges.length === 0) {
     return { newCount: 0, totalCount: existingIds.size };
@@ -405,7 +406,7 @@ export async function updateConversationIndex(): Promise<{ newCount: number; tot
 
   // Embed only new exchanges
   const texts = newExchanges.map((e) => e.userPrompt);
-  console.log(`[Macrodata] Generating embeddings for ${texts.length} new exchanges...`);
+  logger.log(`Generating embeddings for ${texts.length} new exchanges...`);
   const vectors = await embedBatch(texts);
 
   for (let i = 0; i < newExchanges.length; i++) {
@@ -427,7 +428,7 @@ export async function updateConversationIndex(): Promise<{ newCount: number; tot
 
   const duration = Date.now() - startTime;
   const totalCount = existingIds.size + newExchanges.length;
-  console.log(`[Macrodata] Added ${newExchanges.length} exchanges in ${duration}ms (total: ${totalCount})`);
+  logger.log(`Added ${newExchanges.length} exchanges in ${duration}ms (total: ${totalCount})`);
 
   return { newCount: newExchanges.length, totalCount };
 }

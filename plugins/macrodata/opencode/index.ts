@@ -16,6 +16,7 @@ import { homedir } from "os";
 import { spawn } from "child_process";
 import { memoryTools } from "./tools.js";
 import { formatContextForPrompt, storeLastmod, checkFilesChanged, initializeStateRoot, getStateRoot } from "./context.js";
+import { logger } from "./logger.js";
 
 
 /**
@@ -67,7 +68,7 @@ function ensureDaemonRunning(): void {
     });
     child.unref();
   } catch (err) {
-    console.error(`[Macrodata] Failed to start daemon: ${String(err)}`);
+    logger.error(`Failed to start daemon: ${String(err)}`);
   }
 }
 
@@ -151,7 +152,7 @@ export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
             storeLastmod(input.sessionID);
           }
         } catch (err) {
-          console.error(`[Macrodata] Context injection error: ${String(err)}`);
+          logger.error(`Context injection error: ${String(err)}`);
         }
       }
     },
@@ -165,7 +166,7 @@ export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
           output.context.push(memoryContext);
         }
       } catch (err) {
-        console.error(`[Macrodata] Compaction hook error: ${String(err)}`);
+        logger.error(`Compaction hook error: ${String(err)}`);
       }
     },
 

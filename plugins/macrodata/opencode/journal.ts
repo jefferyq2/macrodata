@@ -8,6 +8,7 @@ import { existsSync, appendFileSync, mkdirSync, readFileSync, readdirSync } from
 import { join } from "path";
 import { getStateRoot } from "./context.js";
 import { indexJournalEntry } from "./search.js";
+import { logger } from "./logger.js";
 
 interface JournalEntry {
   timestamp: string;
@@ -67,7 +68,7 @@ export async function logJournal(
   try {
     await indexJournalEntry(entry);
   } catch (err) {
-    console.error("[Macrodata] Failed to index journal entry:", err);
+    logger.error(`Failed to index journal entry: ${err}`);
   }
 }
 
