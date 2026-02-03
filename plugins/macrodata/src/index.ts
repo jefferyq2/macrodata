@@ -40,8 +40,9 @@ import {
   getEntitiesDir,
   getJournalDir,
   getIndexDir,
-  getSchedulesFile,
+  getRemindersDir,
 } from "./config.js";
+import { unlinkSync } from "fs";
 
 // Types
 interface JournalEntry {
@@ -65,10 +66,6 @@ interface Schedule {
   createdAt: string;
 }
 
-interface ScheduleStore {
-  schedules: Schedule[];
-}
-
 // Helpers
 function ensureDirectories() {
   const entitiesDir = getEntitiesDir();
@@ -90,20 +87,51 @@ function ensureDirectories() {
 
 
 
-function loadSchedules(): ScheduleStore {
+function loadAllSchedules(): Schedule[] {
+  const remindersDir = getRemindersDir();
+  const schedules: Schedule[] = [];
+
   try {
-    const schedulesFile = getSchedulesFile();
-    if (existsSync(schedulesFile)) {
-      return JSON.parse(readFileSync(schedulesFile, "utf-8"));
+    if (!existsSync(remindersDir)) return schedules;
+    
+    const files = readdirSync(remindersDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(remindersDir, file), "utf-8");
+        schedules.push(JSON.parse(content));
+      } catch {
+        // Skip malformed files
+      }
     }
   } catch {
     // Ignore
   }
-  return { schedules: [] };
+
+  return schedules;
 }
 
-function saveSchedules(store: ScheduleStore) {
-  writeFileSync(getSchedulesFile(), JSON.stringify(store, null, 2));
+function saveSchedule(schedule: Schedule) {
+  const remindersDir = getRemindersDir();
+  if (!existsSync(remindersDir)) {
+    mkdirSync(remindersDir, { recursive: true });
+  }
+  const filePath = join(remindersDir, `${schedule.id}.json`);
+  writeFileSync(filePath, JSON.stringify(schedule, null, 2));
+}
+
+function deleteScheduleFile(id: string) {
+  const remindersDir = getRemindersDir();
+  const filePath = join(remindersDir, `${id}.json`);
+  
+  try {
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+      return true;
+    }
+  } catch {
+    // Ignore
+  }
+  return false;
 }
 
 function getTodayJournalPath(): string {
@@ -304,14 +332,20 @@ server.tool(
         }
       } else {
         if (action === "rebuild") {
-          const result = await rebuildConversationIndex();
+          // Run in background - don't wait
+          rebuildConversationIndex()
+            .then((result) => console.log(`[Macrodata] Conversation index rebuilt: ${result.exchangeCount} exchanges`))
+            .catch((err) => console.error(`[Macrodata] Conversation index rebuild failed: ${err}`));
           return {
-            content: [{ type: "text" as const, text: `Conversation index rebuilt from scratch. Indexed ${result.exchangeCount} exchanges.` }],
+            content: [{ type: "text" as const, text: `Conversation index rebuild started in background.` }],
           };
         } else if (action === "update") {
-          const result = await updateConversationIndex();
+          // Incremental update - also background
+          updateConversationIndex()
+            .then((result) => console.log(`[Macrodata] Conversation index updated: ${result.filesUpdated} files (${result.skipped} skipped, total: ${result.exchangeCount})`))
+            .catch((err) => console.error(`[Macrodata] Conversation index update failed: ${err}`));
           return {
-            content: [{ type: "text" as const, text: `Conversation index updated. ${result.filesUpdated} files updated, ${result.skipped} skipped. Total: ${result.exchangeCount} exchanges.` }],
+            content: [{ type: "text" as const, text: `Conversation index update started in background.` }],
           };
         } else {
           const stats = await getConversationIndexStats();
@@ -352,10 +386,8 @@ server.tool(
       createdAt: new Date().toISOString(),
     };
 
-    const store = loadSchedules();
-    store.schedules = store.schedules.filter((s) => s.id !== id);
-    store.schedules.push(schedule);
-    saveSchedules(store);
+    // Save to individual file (overwrites if exists)
+    saveSchedule(schedule);
 
     const typeLabel = type === "cron" ? "recurring" : "one-shot";
     return {
@@ -371,13 +403,13 @@ server.tool(
 
 // Tool: list_reminders
 server.tool("list_reminders", "List all active scheduled reminders", {}, async () => {
-  const store = loadSchedules();
+  const schedules = loadAllSchedules();
 
   return {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(store.schedules, null, 2),
+        text: JSON.stringify(schedules, null, 2),
       },
     ],
   };
@@ -391,11 +423,7 @@ server.tool(
     id: z.string().describe("ID of the reminder to remove"),
   },
   async ({ id }) => {
-    const store = loadSchedules();
-    const before = store.schedules.length;
-    store.schedules = store.schedules.filter((s) => s.id !== id);
-    const removed = before > store.schedules.length;
-    saveSchedules(store);
+    const removed = deleteScheduleFile(id);
 
     return {
       content: [

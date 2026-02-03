@@ -5,9 +5,10 @@
  */
 
 import { tool } from "@opencode-ai/plugin";
-import { existsSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, readdirSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { getStateRoot } from "./context.js";
+import { getRemindersDir } from "../src/config.js";
 import {
   logJournal,
   getRecentJournal,
@@ -36,28 +37,51 @@ interface Schedule {
   createdAt: string;
 }
 
-interface ScheduleStore {
-  schedules: Schedule[];
-}
-
-function loadSchedules(): ScheduleStore {
-  const stateRoot = getStateRoot();
-  const schedulesFile = join(stateRoot, ".schedules.json");
+function loadAllSchedules(): Schedule[] {
+  const remindersDir = getRemindersDir();
+  const schedules: Schedule[] = [];
 
   try {
-    if (existsSync(schedulesFile)) {
-      return JSON.parse(readFileSync(schedulesFile, "utf-8"));
+    if (!existsSync(remindersDir)) return schedules;
+    
+    const files = readdirSync(remindersDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(remindersDir, file), "utf-8");
+        schedules.push(JSON.parse(content));
+      } catch {
+        // Skip malformed files
+      }
     }
   } catch {
     // Ignore
   }
-  return { schedules: [] };
+
+  return schedules;
 }
 
-function saveSchedules(store: ScheduleStore): void {
-  const stateRoot = getStateRoot();
-  const schedulesFile = join(stateRoot, ".schedules.json");
-  writeFileSync(schedulesFile, JSON.stringify(store, null, 2));
+function saveSchedule(schedule: Schedule): void {
+  const remindersDir = getRemindersDir();
+  if (!existsSync(remindersDir)) {
+    mkdirSync(remindersDir, { recursive: true });
+  }
+  const filePath = join(remindersDir, `${schedule.id}.json`);
+  writeFileSync(filePath, JSON.stringify(schedule, null, 2));
+}
+
+function deleteScheduleFile(id: string): boolean {
+  const remindersDir = getRemindersDir();
+  const filePath = join(remindersDir, `${id}.json`);
+  
+  try {
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+      return true;
+    }
+  } catch {
+    // Ignore
+  }
+  return false;
 }
 
 // --- Journal Tools ---
@@ -222,17 +246,20 @@ export const rebuildMemoryIndexTool = tool({
   description: "Rebuild the semantic search index from scratch. Use if index seems stale or corrupted.",
   args: {},
   async execute() {
+    // Rebuild memory index synchronously (fast)
     await rebuildMemoryIndex();
-    await rebuildConversationIndex();
     const memoryStats = await getMemoryIndexStats();
-    const convStats = await getConversationIndexStats();
+
+    // Rebuild conversation index in background (slow - thousands of exchanges)
+    rebuildConversationIndex()
+      .then((result) => console.log(`[Macrodata] Conversation index rebuilt: ${result.exchangeCount} exchanges`))
+      .catch((err) => console.error(`[Macrodata] Conversation index rebuild failed: ${err}`));
 
     return JSON.stringify({
       success: true,
-      message: "Index rebuilt",
+      message: "Memory index rebuilt. Conversation index rebuilding in background.",
       stats: {
         memoryItems: memoryStats.itemCount,
-        conversationExchanges: convStats.exchangeCount,
       },
     });
   },
@@ -269,7 +296,6 @@ export const scheduleReminderTool = tool({
       return JSON.stringify({ success: false, error: "Requires 'id', 'cronExpression', 'description', and 'payload'" });
     }
 
-    const store = loadSchedules();
     const schedule: Schedule = {
       id: args.id,
       type: "cron",
@@ -281,9 +307,7 @@ export const scheduleReminderTool = tool({
       createdAt: new Date().toISOString(),
     };
 
-    store.schedules = store.schedules.filter((s) => s.id !== args.id);
-    store.schedules.push(schedule);
-    saveSchedules(store);
+    saveSchedule(schedule);
 
     return JSON.stringify({
       success: true,
@@ -306,7 +330,6 @@ export const scheduleOnceTool = tool({
       return JSON.stringify({ success: false, error: "Requires 'id', 'datetime', 'description', and 'payload'" });
     }
 
-    const store = loadSchedules();
     const schedule: Schedule = {
       id: args.id,
       type: "once",
@@ -318,9 +341,7 @@ export const scheduleOnceTool = tool({
       createdAt: new Date().toISOString(),
     };
 
-    store.schedules = store.schedules.filter((s) => s.id !== args.id);
-    store.schedules.push(schedule);
-    saveSchedules(store);
+    saveSchedule(schedule);
 
     return JSON.stringify({
       success: true,
@@ -339,11 +360,7 @@ export const removeReminderTool = tool({
       return JSON.stringify({ success: false, error: "Requires 'id'" });
     }
 
-    const store = loadSchedules();
-    const before = store.schedules.length;
-    store.schedules = store.schedules.filter((s) => s.id !== args.id);
-    const removed = before > store.schedules.length;
-    saveSchedules(store);
+    const removed = deleteScheduleFile(args.id);
 
     return JSON.stringify({
       success: removed,
@@ -356,8 +373,8 @@ export const listRemindersTool = tool({
   description: "List all scheduled reminders",
   args: {},
   async execute() {
-    const store = loadSchedules();
-    return JSON.stringify({ success: true, reminders: store.schedules });
+    const schedules = loadAllSchedules();
+    return JSON.stringify({ success: true, reminders: schedules });
   },
 });
 

@@ -14,13 +14,14 @@
  */
 
 import { watch } from "chokidar";
-import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } from "fs";
+import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync, readdirSync, unlinkSync } from "fs";
 import { join, basename } from "path";
 import { homedir } from "os";
 import { Cron } from "croner";
 import { spawn, execSync } from "child_process";
 import { indexEntityFile, preloadModel } from "../src/indexer.js";
-import { getStateRoot, getEntitiesDir, getJournalDir, getIndexDir, getSchedulesFile } from "../src/config.js";
+import { getStateRoot, getEntitiesDir, getJournalDir, getIndexDir, getRemindersDir } from "../src/config.js";
+import { updateConversationIndex } from "../opencode/conversations.js";
 
 /**
  * Find an executable in PATH
@@ -130,10 +131,6 @@ ${message}`;
   return false;
 }
 
-interface ScheduleStore {
-  schedules: Schedule[];
-}
-
 function log(message: string) {
   const ts = new Date().toISOString();
   console.log(`[${ts}] ${message}`);
@@ -154,7 +151,7 @@ function writePendingContext(message: string) {
 
 function ensureDirectories() {
   const entitiesDir = getEntitiesDir();
-  const dirs = [DAEMON_DIR, getStateRoot(), getIndexDir(), entitiesDir, getJournalDir(), join(entitiesDir, "people"), join(entitiesDir, "projects")];
+  const dirs = [DAEMON_DIR, getStateRoot(), getIndexDir(), entitiesDir, getJournalDir(), getRemindersDir(), join(entitiesDir, "people"), join(entitiesDir, "projects")];
   for (const dir of dirs) {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
@@ -163,23 +160,51 @@ function ensureDirectories() {
   }
 }
 
-function loadSchedules(): ScheduleStore {
+function loadAllSchedules(): Schedule[] {
+  const remindersDir = getRemindersDir();
+  const schedules: Schedule[] = [];
+
   try {
-    const schedulesFile = getSchedulesFile();
-    if (existsSync(schedulesFile)) {
-      return JSON.parse(readFileSync(schedulesFile, "utf-8"));
+    if (!existsSync(remindersDir)) return schedules;
+    
+    const files = readdirSync(remindersDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(remindersDir, file), "utf-8");
+        const schedule = JSON.parse(content) as Schedule;
+        schedules.push(schedule);
+      } catch (err) {
+        logError(`Failed to load schedule ${file}: ${String(err)}`);
+      }
     }
   } catch (err) {
-    logError(`Failed to load schedules: ${String(err)}`);
+    logError(`Failed to read reminders directory: ${String(err)}`);
   }
-  return { schedules: [] };
+
+  return schedules;
 }
 
-function saveSchedules(store: ScheduleStore) {
+function saveSchedule(schedule: Schedule) {
+  const remindersDir = getRemindersDir();
+  const filePath = join(remindersDir, `${schedule.id}.json`);
+  
   try {
-    writeFileSync(getSchedulesFile(), JSON.stringify(store, null, 2));
+    writeFileSync(filePath, JSON.stringify(schedule, null, 2));
   } catch (err) {
-    logError(`Failed to save schedules: ${String(err)}`);
+    logError(`Failed to save schedule ${schedule.id}: ${String(err)}`);
+  }
+}
+
+function deleteScheduleFile(id: string) {
+  const remindersDir = getRemindersDir();
+  const filePath = join(remindersDir, `${id}.json`);
+  
+  try {
+    if (existsSync(filePath)) {
+      unlinkSync(filePath);
+    }
+  } catch (err) {
+    logError(`Failed to delete schedule file ${id}: ${String(err)}`);
   }
 }
 
@@ -215,16 +240,25 @@ class MacrodataLocalDaemon {
     process.on("SIGTERM", () => this.shutdown());
     process.on("SIGINT", () => this.shutdown());
 
-    // Preload embedding model in background (don't block startup)
+    // Preload embedding model and update conversation index in background
     preloadModel()
-      .then(() => log("Embedding model preloaded"))
-      .catch((err) => logError(`Failed to preload embedding model: ${err}`));
+      .then(() => {
+        log("Embedding model preloaded");
+        // After model is loaded, incrementally update conversation index
+        return updateConversationIndex();
+      })
+      .then((result) => {
+        if (result.newCount > 0) {
+          log(`Conversation index updated: +${result.newCount} (total: ${result.totalCount})`);
+        }
+      })
+      .catch((err) => logError(`Failed to preload/index: ${err}`));
 
     // Load and start schedules
     this.loadAndStartSchedules();
 
     // Watch for schedule changes
-    this.watchSchedulesFile();
+    this.watchRemindersDir();
 
     // Start file watcher for entity changes
     this.startFileWatcher();
@@ -233,30 +267,41 @@ class MacrodataLocalDaemon {
     log("Daemon running");
   }
 
-  private watchSchedulesFile() {
-    const schedulesFile = getSchedulesFile();
-    this.schedulesWatcher = watch(schedulesFile, {
+  private watchRemindersDir() {
+    const remindersDir = getRemindersDir();
+    this.schedulesWatcher = watch(join(remindersDir, "*.json"), {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 100 },
     });
 
-    this.schedulesWatcher.on("change", () => {
-      log("Schedules file changed, reloading...");
+    this.schedulesWatcher.on("add", (path) => {
+      log(`Reminder added: ${basename(path)}`);
       this.reloadSchedules();
     });
 
-    this.schedulesWatcher.on("add", () => {
-      log("Schedules file created, loading...");
+    this.schedulesWatcher.on("change", (path) => {
+      log(`Reminder changed: ${basename(path)}`);
       this.reloadSchedules();
+    });
+
+    this.schedulesWatcher.on("unlink", (path) => {
+      log(`Reminder removed: ${basename(path)}`);
+      const id = basename(path, ".json");
+      const job = this.cronJobs.get(id);
+      if (job) {
+        job.stop();
+        this.cronJobs.delete(id);
+        log(`Stopped job: ${id}`);
+      }
     });
   }
 
   private reloadSchedules() {
-    const store = loadSchedules();
+    const schedules = loadAllSchedules();
     const now = Date.now();
     const currentIds = new Set(this.cronJobs.keys());
 
-    for (const schedule of store.schedules) {
+    for (const schedule of schedules) {
       // Skip if already running
       if (currentIds.has(schedule.id)) {
         currentIds.delete(schedule.id);
@@ -276,10 +321,10 @@ class MacrodataLocalDaemon {
       }
     }
 
-    // Stop jobs that were removed from the file
-    const storeIds = new Set(store.schedules.map(s => s.id));
+    // Stop jobs that were removed
+    const scheduleIds = new Set(schedules.map(s => s.id));
     for (const id of currentIds) {
-      if (!storeIds.has(id)) {
+      if (!scheduleIds.has(id)) {
         const job = this.cronJobs.get(id);
         if (job) {
           job.stop();
@@ -291,10 +336,10 @@ class MacrodataLocalDaemon {
   }
 
   private loadAndStartSchedules() {
-    const store = loadSchedules();
+    const schedules = loadAllSchedules();
     const now = Date.now();
 
-    for (const schedule of store.schedules) {
+    for (const schedule of schedules) {
       if (schedule.type === "cron") {
         this.startCronJob(schedule);
       } else if (schedule.type === "once") {
@@ -360,12 +405,8 @@ class MacrodataLocalDaemon {
   }
 
   addSchedule(schedule: Schedule) {
-    const store = loadSchedules();
-
-    // Remove existing with same ID
-    store.schedules = store.schedules.filter((s) => s.id !== schedule.id);
-    store.schedules.push(schedule);
-    saveSchedules(store);
+    // Save to individual file
+    saveSchedule(schedule);
 
     // Start the job
     if (schedule.type === "cron") {
@@ -383,10 +424,8 @@ class MacrodataLocalDaemon {
       this.cronJobs.delete(id);
     }
 
-    // Remove from store
-    const store = loadSchedules();
-    store.schedules = store.schedules.filter((s) => s.id !== id);
-    saveSchedules(store);
+    // Delete the file
+    deleteScheduleFile(id);
 
     log(`Removed schedule: ${id}`);
   }

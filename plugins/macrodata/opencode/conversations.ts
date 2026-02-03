@@ -99,7 +99,7 @@ interface MessageInfo {
   id: string;
   sessionID: string;
   role: "user" | "assistant";
-  timestamp: number;
+  time?: { created: number };
   agent?: string;
 }
 
@@ -222,13 +222,19 @@ function* scanExchanges(): Generator<ConversationExchange> {
         const projectPath = ""; // TODO: Could parse from session metadata
         const projectName = projectPath ? basename(projectPath) : "unknown";
 
+        // Skip if timestamp is invalid
+        const created = user.time?.created;
+        if (!created) continue;
+        const ts = new Date(created);
+        if (isNaN(ts.getTime())) continue;
+
         yield {
           id: `oc-${sessionId}-${user.id}`,
           userPrompt: user.text.slice(0, 1000),
           assistantSummary: assistant.text.slice(0, 500),
           project: projectName,
           projectPath,
-          timestamp: new Date(user.timestamp).toISOString(),
+          timestamp: ts.toISOString(),
           sessionId,
           messageId: user.id,
         };
@@ -291,7 +297,10 @@ export async function rebuildConversationIndex(): Promise<{ exchangeCount: numbe
  * Time-based weight for scoring
  */
 function getTimeWeight(timestamp: string): number {
-  const age = Date.now() - new Date(timestamp).getTime();
+  const ts = new Date(timestamp);
+  if (isNaN(ts.getTime())) return 0.5; // Default weight for invalid dates
+  
+  const age = Date.now() - ts.getTime();
   const dayMs = 24 * 60 * 60 * 1000;
 
   if (age < 7 * dayMs) return 1.0;
@@ -367,4 +376,58 @@ export async function getConversationIndexStats(): Promise<{ exchangeCount: numb
   const idx = await getConversationIndex();
   const items = await idx.listItems();
   return { exchangeCount: items.length };
+}
+
+/**
+ * Incrementally update conversation index (only new exchanges)
+ */
+export async function updateConversationIndex(): Promise<{ newCount: number; totalCount: number }> {
+  console.log("[Macrodata] Updating OpenCode conversation index...");
+  const startTime = Date.now();
+
+  const idx = await getConversationIndex();
+  const existingItems = await idx.listItems();
+  const existingIds = new Set(existingItems.map(item => item.id));
+
+  // Collect only new exchanges
+  const newExchanges: ConversationExchange[] = [];
+  for (const exchange of scanExchanges()) {
+    if (!existingIds.has(exchange.id)) {
+      newExchanges.push(exchange);
+    }
+  }
+
+  console.log(`[Macrodata] Found ${newExchanges.length} new exchanges (${existingIds.size} already indexed)`);
+
+  if (newExchanges.length === 0) {
+    return { newCount: 0, totalCount: existingIds.size };
+  }
+
+  // Embed only new exchanges
+  const texts = newExchanges.map((e) => e.userPrompt);
+  console.log(`[Macrodata] Generating embeddings for ${texts.length} new exchanges...`);
+  const vectors = await embedBatch(texts);
+
+  for (let i = 0; i < newExchanges.length; i++) {
+    const ex = newExchanges[i];
+    await idx.upsertItem({
+      id: ex.id,
+      vector: vectors[i],
+      metadata: {
+        userPrompt: ex.userPrompt,
+        assistantSummary: ex.assistantSummary,
+        project: ex.project,
+        projectPath: ex.projectPath,
+        timestamp: ex.timestamp,
+        sessionId: ex.sessionId,
+        messageId: ex.messageId,
+      },
+    });
+  }
+
+  const duration = Date.now() - startTime;
+  const totalCount = existingIds.size + newExchanges.length;
+  console.log(`[Macrodata] Added ${newExchanges.length} exchanges in ${duration}ms (total: ${totalCount})`);
+
+  return { newCount: newExchanges.length, totalCount };
 }

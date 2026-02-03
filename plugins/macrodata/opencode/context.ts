@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from "fs";
 
 import { join } from "path";
-import { getStateRoot, getJournalDir, getSchedulesFile } from "../src/config.js";
+import { getStateRoot, getJournalDir, getRemindersDir } from "../src/config.js";
 import { detectUser } from "../src/detect-user.js";
 
 // Track lastmod times per session
@@ -144,15 +144,24 @@ interface Schedule {
 }
 
 function getSchedules(): Schedule[] {
-  const schedulesFile = getSchedulesFile();
-  if (!existsSync(schedulesFile)) return [];
+  const remindersDir = getRemindersDir();
+  if (!existsSync(remindersDir)) return [];
 
+  const schedules: Schedule[] = [];
   try {
-    const data = JSON.parse(readFileSync(schedulesFile, "utf-8"));
-    return data.schedules || [];
+    const files = readdirSync(remindersDir).filter(f => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const content = readFileSync(join(remindersDir, file), "utf-8");
+        schedules.push(JSON.parse(content));
+      } catch {
+        // Skip malformed files
+      }
+    }
   } catch {
     return [];
   }
+  return schedules;
 }
 
 interface FormatOptions {
@@ -201,7 +210,8 @@ Use this pre-detected info during onboarding instead of running detection script
   const journalEntries = getRecentJournal(forCompaction ? 10 : 5);
   const journalFormatted = journalEntries
     .map((e) => {
-      const date = new Date(e.timestamp).toLocaleDateString();
+      const ts = new Date(e.timestamp);
+      const date = isNaN(ts.getTime()) ? "unknown" : ts.toLocaleDateString();
       return `- [${e.topic}] ${e.content.split("\n")[0]} (${date})`;
     })
     .join("\n");
