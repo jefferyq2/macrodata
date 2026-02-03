@@ -276,22 +276,31 @@ class MacrodataLocalDaemon {
 
   private watchRemindersDir() {
     const remindersDir = getRemindersDir();
-    this.schedulesWatcher = watch(join(remindersDir, "*.json"), {
+    log(`Watching for reminders in: ${remindersDir}`);
+
+    this.schedulesWatcher = watch(remindersDir, {
       ignoreInitial: true,
       awaitWriteFinish: { stabilityThreshold: 100 },
     });
 
     this.schedulesWatcher.on("add", (path) => {
+      if (!path.endsWith(".json")) return;
       log(`Reminder added: ${basename(path)}`);
       this.reloadSchedules();
     });
 
+    this.schedulesWatcher.on("error", (err) => {
+      logError(`Reminders watcher error: ${String(err)}`);
+    });
+
     this.schedulesWatcher.on("change", (path) => {
+      if (!path.endsWith(".json")) return;
       log(`Reminder changed: ${basename(path)}`);
       this.reloadSchedules();
     });
 
     this.schedulesWatcher.on("unlink", (path) => {
+      if (!path.endsWith(".json")) return;
       log(`Reminder removed: ${basename(path)}`);
       const id = basename(path, ".json");
       const job = this.cronJobs.get(id);
