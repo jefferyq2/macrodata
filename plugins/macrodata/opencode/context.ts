@@ -215,7 +215,7 @@ export async function formatContextForPrompt(
 
 ## Status: First Run
 
-Memory is not yet configured. Load the \`onboarding\` skill to set up.
+Memory is not yet configured. Load the \`macrodata-onboarding\` skill to set up.
 
 ## Detected User Info
 

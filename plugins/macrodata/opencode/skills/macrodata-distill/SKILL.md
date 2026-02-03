@@ -1,5 +1,5 @@
 ---
-name: distill
+name: macrodata-distill
 description: Extract distilled actions and facts from today's conversations. Spawns sub-agents per conversation to avoid context blowup.
 ---
 

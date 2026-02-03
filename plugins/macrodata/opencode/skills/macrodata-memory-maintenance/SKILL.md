@@ -1,5 +1,5 @@
 ---
-name: memory-maintenance
+name: macrodata-memory-maintenance
 description: End of day memory maintenance. Runs distillation, updates state files, prunes stale info. Runs in background with no user interaction.
 ---
 
@@ -13,14 +13,14 @@ Scheduled maintenance to keep memory current and useful. Runs automatically at e
 
 ### 1. Run Distillation
 
-First, run the `/distill` skill to extract facts from today's conversations.
+First, run the `macrodata-distill` skill to extract facts from today's conversations.
 
 This processes all OpenCode sessions, spawns sub-agents for extraction, and writes distilled actions to the journal.
 
 **Check if distill already ran today:**
 Use `get_recent_journal` and look for topic "distill-summary" from today.
 
-If not found, invoke `/distill`. If already ran, skip to step 2.
+If not found, load `macrodata-distill` skill. If already ran, skip to step 2.
 
 ### 2. Review Distilled Content
 

@@ -1,5 +1,5 @@
 ---
-name: onboarding
+name: macrodata-onboarding
 description: Guide new users through macrodata setup. Creates identity, human profile, and workspace files. Use when get_context returns isFirstRun true, or user asks to set up their profile.
 ---
 
@@ -211,9 +211,9 @@ Offer optional scheduled reminders. These run in the background with no user int
 
 1. **Morning prep** (daily, 9am) - Quick review to set the day's focus. Updates today.md.
 
-2. **Memory maintenance** (daily, 6pm) - End of day cleanup. Reviews journals, updates state files, prunes stale info. Runs the `/memory-maintenance` skill.
+2. **Memory maintenance** (daily, 6pm) - End of day cleanup. Reviews journals, updates state files, prunes stale info. Runs the `macrodata-memory-maintenance` skill.
 
-3. **Dreamtime** (daily, 2am) - Deep nightly reflection. Self-improvement, research, pattern recognition. Runs the `/dreamtime` skill.
+3. **Dreamtime** (daily, 2am) - Deep nightly reflection. Self-improvement, research, pattern recognition. Runs the `macrodata-dreamtime` skill.
 
 For each selected reminder, use the `schedule` tool to create it:
 
@@ -226,18 +226,18 @@ Morning prep:
 - payload: Review today.md. What's the focus for today? Any carryover from yesterday? Check if any calendar, email, or task tools are available and use them to see what's planned. Keep it brief.
 
 Memory maintenance:
-- id: memory-maintenance
+- id: macrodata-memory-maintenance
 - type: cron
 - expression: 0 18 * * *
 - description: End of day memory maintenance
-- payload: Run the memory-maintenance skill.
+- payload: Run the macrodata-memory-maintenance skill.
 
 Dreamtime:
-- id: dreamtime
+- id: macrodata-dreamtime
 - type: cron
 - expression: 0 2 * * *
 - description: Nightly reflection and self-improvement
-- payload: Run the dreamtime skill.
+- payload: Run the macrodata-dreamtime skill.
 ```
 
 ### Phase 7: Finalize

@@ -1,5 +1,5 @@
 ---
-name: dreamtime
+name: macrodata-dreamtime
 description: Deep nightly reflection. Self-improvement, research, pattern recognition. Runs in background with no user interaction.
 ---
 
