@@ -44,13 +44,22 @@ If they decline, explain that macrodata won't work without Bun and ask if they'd
 
 ### Phase 1: Location
 
-Ask where to store macrodata files. Suggest accessible locations:
+Ask where to store macrodata files. First, check which directories exist:
 
-1. `~/Documents/macrodata` (easy to find)
-2. `~/Repos/macrodata` or `~/code/macrodata` (if they use a code folder)
+```bash
+# Check for common code directories
+ls -d ~/Repos ~/repos ~/Code ~/code ~/Projects ~/projects ~/Developer ~/dev 2>/dev/null
+```
+
+Then offer location options based on what exists:
+
+1. `~/Documents/macrodata` (easy to find, always suggest)
+2. `~/<detected-code-dir>/macrodata` (only if a code directory was found above)
 3. `~/.config/macrodata` (default, hidden)
 
-If they choose a non-default location, write it to `~/.config/opencode/macrodata.json`:
+**Important:** Only suggest a code directory option if one actually exists. Don't suggest `~/Repos` or similar if the user doesn't have that directory.
+
+If they choose a non-default location, write it to `~/.config/macrodata/config.json`:
 
 ```json
 {
@@ -296,8 +305,9 @@ Summarize only actionable patterns for the human profile.
 
 First, where would you like me to store your memory files?
 1. `~/Documents/macrodata` (easy to find in Finder)
-2. `~/Repos/macrodata` (with your code)
-3. `~/.config/macrodata` (hidden, default)
+2. `~/.config/macrodata` (hidden, default)
+
+_[If a code directory like ~/Code or ~/Projects exists, also offer that as an option]_
 
 **User:** Documents is fine
 
