@@ -2,6 +2,8 @@
 
 A Claude Code and OpenCode plugin that gives it the tools of a stateful agent, packaged so you can still use it for normal work. Work in Claude Code or OpenCode as you normally would and Macrodata quietly adds useful context and powerful memory and autonomy features.
 
+> This is experimental software. Use at your own risk.
+
 - **Layered memory** - identity, journal, topics, semantic search across sessions
 - **Scheduling and autonomy** - recurring background tasks, reminders, morning prep, self-maintenance
 - **Memory distillation** - consolidates learnings into structured knowledge
