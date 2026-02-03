@@ -4,7 +4,7 @@
  * Reads state files and formats them for injection into conversations
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from "fs";
 
 import { join } from "path";
 import { getStateRoot, getJournalDir, getSchedulesFile } from "../src/config.js";
@@ -58,12 +58,13 @@ export function checkFilesChanged(sessionId: string): boolean {
 export { getStateRoot } from "../src/config.js";
 
 /**
- * Initialize state directory with default structure
+ * Initialize state directory structure (directories only, no default files)
+ * Files are created during onboarding.
  */
 export function initializeStateRoot(): void {
   const stateRoot = getStateRoot();
   
-  // Create directories
+  // Create directories only - files created during onboarding
   const dirs = [
     stateRoot,
     join(stateRoot, "state"),
@@ -78,41 +79,6 @@ export function initializeStateRoot(): void {
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
-  }
-  
-  // Create default files if they don't exist
-  const identityPath = join(stateRoot, "state", "identity.md");
-  if (!existsSync(identityPath)) {
-    writeFileSync(identityPath, `# Identity
-
-You are a coding assistant with persistent memory. Use your memory tools to:
-- Log important observations with \`log_journal\`
-- Search past context with \`search_memory\`
-- Save session summaries with \`save_conversation_summary\`
-`);
-  }
-  
-  const todayPath = join(stateRoot, "state", "today.md");
-  if (!existsSync(todayPath)) {
-    const today = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
-    writeFileSync(todayPath, `# Today – ${today}
-
-## Priorities
-
-_Add your priorities here_
-
-## Notes
-
-_Session notes_
-`);
-  }
-  
-  const humanPath = join(stateRoot, "state", "human.md");
-  if (!existsSync(humanPath)) {
-    writeFileSync(humanPath, `# Human
-
-_Add information about yourself here_
-`);
   }
 }
 

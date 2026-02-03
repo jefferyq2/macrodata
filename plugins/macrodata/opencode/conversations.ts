@@ -26,7 +26,6 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
   if (embeddingPipeline) return embeddingPipeline;
   if (pipelineLoading) return pipelineLoading;
 
-  console.error("[Macrodata] Loading embedding model...");
   pipelineLoading = pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
     quantized: true,
   });

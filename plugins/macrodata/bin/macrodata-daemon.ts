@@ -18,9 +18,21 @@ import { existsSync, readFileSync, writeFileSync, appendFileSync, mkdirSync } fr
 import { join, basename } from "path";
 import { homedir } from "os";
 import { Cron } from "croner";
-import { spawn } from "child_process";
+import { spawn, execSync } from "child_process";
 import { indexEntityFile, preloadModel } from "../src/indexer.js";
 import { getStateRoot, getEntitiesDir, getJournalDir, getIndexDir, getSchedulesFile } from "../src/config.js";
+
+/**
+ * Find an executable in PATH
+ */
+async function findExecutable(name: string): Promise<string | null> {
+  try {
+    const result = execSync(`which ${name}`, { encoding: "utf-8" }).trim();
+    return result || null;
+  } catch {
+    return null;
+  }
+}
 
 // Daemon-specific path helpers
 const DAEMON_DIR = join(homedir(), ".config", "macrodata");
@@ -58,7 +70,12 @@ async function triggerAgent(
   }
 
   const timestamp = new Date().toLocaleString();
-  const fullMessage = `[Scheduled reminder: ${options.description || "reminder"}]\nCurrent time: ${timestamp}\n\n${message}`;
+  const fullMessage = `[Scheduled reminder: ${options.description || "reminder"}]
+Current time: ${timestamp}
+
+IMPORTANT: Use the macrodata_* tools (e.g., macrodata_log_journal, macrodata_search_memory) for memory operations. You are running in a non-interactive scheduled context.
+
+${message}`;
 
   try {
     if (agent === "opencode") {
@@ -68,11 +85,16 @@ async function triggerAgent(
         args.push("--model", options.model);
       }
       
-      log(`Triggering OpenCode: opencode run "..." ${options.model ? `--model ${options.model}` : ""}`);
+      // Find opencode in PATH or use npx as fallback
+      const opencodePath = await findExecutable("opencode") || "npx";
+      const finalArgs = opencodePath === "npx" ? ["opencode", ...args] : args;
       
-      const proc = spawn("opencode", args, {
+      log(`Triggering OpenCode: ${opencodePath} ${finalArgs.join(" ").substring(0, 50)}...`);
+      
+      const proc = spawn(opencodePath, finalArgs, {
         stdio: ["ignore", "pipe", "pipe"],
         detached: true,
+        env: { ...process.env, PATH: process.env.PATH },
       });
 
       proc.unref();
@@ -102,7 +124,7 @@ async function triggerAgent(
       return true;
     }
   } catch (err) {
-    log(`Failed to trigger ${agent}: ${String(err)}`);
+    logError(`Failed to trigger ${agent}: ${String(err)}`);
   }
 
   return false;
@@ -114,6 +136,11 @@ interface ScheduleStore {
 
 function log(message: string) {
   const ts = new Date().toISOString();
+  console.log(`[${ts}] ${message}`);
+}
+
+function logError(message: string) {
+  const ts = new Date().toISOString();
   console.error(`[${ts}] ${message}`);
 }
 
@@ -121,7 +148,7 @@ function writePendingContext(message: string) {
   try {
     appendFileSync(getPendingContext(), message + "\n");
   } catch (err) {
-    log(`Failed to write pending context: ${String(err)}`);
+    logError(`Failed to write pending context: ${String(err)}`);
   }
 }
 
@@ -143,7 +170,7 @@ function loadSchedules(): ScheduleStore {
       return JSON.parse(readFileSync(schedulesFile, "utf-8"));
     }
   } catch (err) {
-    log(`Failed to load schedules: ${String(err)}`);
+    logError(`Failed to load schedules: ${String(err)}`);
   }
   return { schedules: [] };
 }
@@ -152,7 +179,7 @@ function saveSchedules(store: ScheduleStore) {
   try {
     writeFileSync(getSchedulesFile(), JSON.stringify(store, null, 2));
   } catch (err) {
-    log(`Failed to save schedules: ${String(err)}`);
+    logError(`Failed to save schedules: ${String(err)}`);
   }
 }
 
@@ -191,7 +218,7 @@ class MacrodataLocalDaemon {
     // Preload embedding model in background (don't block startup)
     preloadModel()
       .then(() => log("Embedding model preloaded"))
-      .catch((err) => log(`Failed to preload embedding model: ${err}`));
+      .catch((err) => logError(`Failed to preload embedding model: ${err}`));
 
     // Load and start schedules
     this.loadAndStartSchedules();
@@ -291,7 +318,7 @@ class MacrodataLocalDaemon {
       this.cronJobs.set(schedule.id, job);
       log(`Started cron job: ${schedule.id} (${schedule.expression})`);
     } catch (err) {
-      log(`Failed to start cron job ${schedule.id}: ${String(err)}`);
+      logError(`Failed to start cron job ${schedule.id}: ${String(err)}`);
     }
   }
 

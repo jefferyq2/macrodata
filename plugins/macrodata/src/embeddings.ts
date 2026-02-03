@@ -28,7 +28,6 @@ async function getEmbeddingPipeline(): Promise<FeatureExtractionPipeline> {
     return pipelineLoading;
   }
 
-  console.error("[Embeddings] Loading embedding model (first time only)...");
   pipelineLoading = pipeline("feature-extraction", "Xenova/all-MiniLM-L6-v2", {
     // Use quantized model for faster loading
     quantized: true,

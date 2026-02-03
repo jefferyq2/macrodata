@@ -10,12 +10,66 @@
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import type { Part } from "@opencode-ai/sdk";
-import { existsSync, mkdirSync, cpSync, readdirSync } from "fs";
+import { existsSync, mkdirSync, cpSync, readdirSync, readFileSync, openSync } from "fs";
 import { join } from "path";
 import { homedir } from "os";
+import { spawn } from "child_process";
 import { memoryTools } from "./tools.js";
-import { formatContextForPrompt, storeLastmod, checkFilesChanged } from "./context.js";
+import { formatContextForPrompt, storeLastmod, checkFilesChanged, initializeStateRoot, getStateRoot } from "./context.js";
 
+
+/**
+ * Check if a process with given PID is running
+ */
+function isProcessRunning(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ensure the macrodata daemon is running
+ * Checks PID file, starts daemon if not running
+ */
+function ensureDaemonRunning(): void {
+  const pidFile = join(homedir(), ".config", "macrodata", ".daemon.pid");
+  const stateRoot = getStateRoot();
+  const daemonScript = join(import.meta.dirname, "..", "bin", "macrodata-daemon.ts");
+  
+  // Check if daemon is already running
+  if (existsSync(pidFile)) {
+    try {
+      const pid = parseInt(readFileSync(pidFile, "utf-8").trim(), 10);
+      if (isProcessRunning(pid)) {
+        return; // Daemon is running
+      }
+    } catch {
+      // Invalid PID file, continue to start daemon
+    }
+  }
+  
+  // Start daemon - it writes its own PID file
+  try {
+    // Ensure config dir exists for PID file
+    mkdirSync(join(homedir(), ".config", "macrodata"), { recursive: true });
+    
+    const logFile = join(getStateRoot(), ".daemon.log");
+    const out = openSync(logFile, "a");
+    const err = openSync(logFile, "a");
+    
+    const child = spawn("bun", ["run", daemonScript], {
+      detached: true,
+      stdio: ["ignore", out, err],
+      env: { ...process.env, MACRODATA_ROOT: stateRoot },
+    });
+    child.unref();
+  } catch (err) {
+    console.error(`[Macrodata] Failed to start daemon: ${String(err)}`);
+  }
+}
 
 /**
  * Install plugin skills to ~/.config/opencode/skills/
@@ -57,6 +111,12 @@ function installSkills(): void {
 const injectedSessions = new Set<string>();
 
 export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
+  // Initialize state directories
+  initializeStateRoot();
+  
+  // Ensure daemon is running for scheduled reminders
+  ensureDaemonRunning();
+  
   // Install skills to global config on plugin load
   installSkills();
 

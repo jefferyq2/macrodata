@@ -191,7 +191,29 @@ Set up working context:
 - [things in progress]
 ```
 
-### Phase 6: Scheduled Reminders
+### Phase 6: Permissions
+
+Ask if they'd like to pre-grant permissions for macrodata paths. This avoids permission prompts every session.
+
+**Ask:** "Would you like me to update your OpenCode settings to pre-grant permissions for macrodata? This means you won't be prompted each time macrodata reads or writes to its memory folder."
+
+If yes, update `~/.config/opencode/opencode.json` to add these permissions:
+
+```json
+{
+  "permission": {
+    "external_directory": {
+      "<macrodata-root>/**": "allow"
+    }
+  }
+}
+```
+
+**Important:** Replace `<macrodata-root>` with their actual chosen root path (e.g., `~/Documents/macrodata`).
+
+Merge with existing settings rather than overwriting. Read the file, add the new permissions to the existing `permission` object, and write back.
+
+### Phase 7: Scheduled Reminders
 
 **First, check available integrations:**
 
@@ -240,7 +262,7 @@ Dreamtime:
 - payload: Run the macrodata-dreamtime skill.
 ```
 
-### Phase 7: Finalize
+### Phase 8: Finalize
 
 1. Rebuild the memory index with `manage_index`
 2. Log completion to journal

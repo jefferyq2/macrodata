@@ -57,6 +57,10 @@ export function getIndexDir(): string {
   return join(getStateRoot(), ".index");
 }
 
+export function getTopicsDir(): string {
+  return join(getStateRoot(), "topics");
+}
+
 export function getSchedulesFile(): string {
   return join(getStateRoot(), ".schedules.json");
 }
