@@ -11,10 +11,10 @@
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import type { Part } from "@opencode-ai/sdk";
 import { memoryTools } from "./tools.js";
-import { formatContextForPrompt, getStateRoot } from "./context.js";
+import { formatContextForPrompt, getStateRoot, storeLastmod, checkFilesChanged } from "./context.js";
 import { logJournal } from "./journal.js";
 
-// Track which sessions have had context injected
+// Track which sessions have had initial context injected
 const injectedSessions = new Set<string>();
 
 export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
@@ -25,12 +25,15 @@ export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
   console.error(`[Macrodata] State root: ${stateRoot}`);
 
   return {
-    // Inject context on first message of each session
+    // Inject context on first message or when state files change
     "chat.message": async (input, output) => {
       const isFirstMessage = !injectedSessions.has(input.sessionID);
+      const filesChanged = !isFirstMessage && checkFilesChanged(input.sessionID);
 
-      if (isFirstMessage) {
-        injectedSessions.add(input.sessionID);
+      if (isFirstMessage || filesChanged) {
+        if (isFirstMessage) {
+          injectedSessions.add(input.sessionID);
+        }
 
         try {
           const memoryContext = await formatContextForPrompt();
@@ -48,8 +51,12 @@ export const MacrodataPlugin: Plugin = async (ctx: PluginInput) => {
             // Prepend context to message parts
             output.parts.unshift(contextPart);
 
+            // Store lastmod after successful injection
+            storeLastmod(input.sessionID);
+
+            const reason = isFirstMessage ? "first message" : "state files changed";
             console.error(
-              `[Macrodata] Injected context (${memoryContext.length} chars)`
+              `[Macrodata] Injected context (${memoryContext.length} chars, ${reason})`
             );
           }
         } catch (err) {

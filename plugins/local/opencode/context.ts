@@ -4,10 +4,54 @@
  * Reads state files and formats them for injection into conversations
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync } from "fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, writeFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { getStateRoot, getJournalDir, getSchedulesFile } from "../src/config.js";
+
+// Track lastmod times per session
+const sessionLastmod = new Map<string, Record<string, number>>();
+
+function getStateFilePaths(): string[] {
+  const stateRoot = getStateRoot();
+  return [
+    join(stateRoot, "identity.md"),
+    join(stateRoot, "state", "today.md"),
+    join(stateRoot, "state", "human.md"),
+    join(stateRoot, "state", "workspace.md"),
+  ];
+}
+
+function getCurrentLastmod(): Record<string, number> {
+  const result: Record<string, number> = {};
+  for (const path of getStateFilePaths()) {
+    try {
+      if (existsSync(path)) {
+        result[path] = statSync(path).mtimeMs;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return result;
+}
+
+export function storeLastmod(sessionId: string): void {
+  sessionLastmod.set(sessionId, getCurrentLastmod());
+}
+
+export function checkFilesChanged(sessionId: string): boolean {
+  const stored = sessionLastmod.get(sessionId);
+  if (!stored) return true; // No stored lastmod, treat as changed
+
+  const current = getCurrentLastmod();
+  for (const path of getStateFilePaths()) {
+    if (current[path] !== stored[path]) {
+      return true;
+    }
+  }
+  return false;
+}
 
 // Re-export for compatibility
 export { getStateRoot } from "../src/config.js";
