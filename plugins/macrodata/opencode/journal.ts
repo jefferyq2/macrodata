@@ -68,7 +68,7 @@ export async function logJournal(
   try {
     await indexJournalEntry(entry);
   } catch (err) {
-    logger.error(`Failed to index journal entry: ${err}`);
+    logger.error(`Failed to index journal entry: ${String(err)}`);
   }
 }
 
