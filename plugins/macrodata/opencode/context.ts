@@ -198,19 +198,19 @@ Use this pre-detected info during onboarding instead of running detection script
       : "_No active schedules_";
 
   const sections = [
-    `## Identity\n\n${identity || "_Not configured_"}`,
-    `## Today\n\n${today || "_Empty_"}`,
-    `## Human\n\n${human || "_Empty_"}`,
+    `<macrodata-identity>\n${identity || "_Not configured_"}\n</macrodata-identity>`,
+    `<macrodata-today>\n${today || "_Empty_"}\n</macrodata-today>`,
+    `<macrodata-human>\n${human || "_Empty_"}\n</macrodata-human>`,
   ];
 
   if (workspace) {
-    sections.push(`## Workspace\n\n${workspace}`);
+    sections.push(`<macrodata-workspace>\n${workspace}\n</macrodata-workspace>`);
   }
 
-  sections.push(`## Recent Journal\n\n${journalFormatted || "_No entries_"}`);
+  sections.push(`<macrodata-journal>\n${journalFormatted || "_No entries_"}\n</macrodata-journal>`);
 
   if (!forCompaction) {
-    sections.push(`## Schedules\n\n${schedulesFormatted}`);
+    sections.push(`<macrodata-schedules>\n${schedulesFormatted}\n</macrodata-schedules>`);
 
     // List state files
     const stateDir = join(stateRoot, "state");
@@ -245,18 +245,13 @@ Use this pre-detected info during onboarding instead of running detection script
     const usage = existsSync(usagePath) ? readFileSync(usagePath, "utf-8").trim() : "";
 
     if (usage) {
-      sections.push(usage);
+      sections.push(`<macrodata-usage>\n${usage}\n</macrodata-usage>`);
     }
 
     sections.push(
-      `## Paths
-
-Root: \`${stateRoot}\`
-
-### Files
-${filesFormatted}`
+      `<macrodata-files root="${stateRoot}">\n${filesFormatted}\n</macrodata-files>`
     );
   }
 
-  return `[MACRODATA]\n\n${sections.join("\n\n")}`;
+  return `<macrodata>\n${sections.join("\n\n")}\n</macrodata>`;
 }

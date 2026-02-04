@@ -191,54 +191,49 @@ inject_static_context() {
         # Detect user info to avoid multiple permission prompts during onboarding
         local USER_INFO=$("$SCRIPT_DIR/detect-user.sh" 2>/dev/null || echo '{}')
         
-        CONTEXT="<macrodata-local>
-## First Run
-
+        CONTEXT="<macrodata>
+<macrodata-first-run state-root=\"$STATE_ROOT\">
 Macrodata local memory is not yet configured. Run \`/onboarding\` to set up.
+</macrodata-first-run>
 
-State directory: $STATE_ROOT
-
-## Detected User Info
-
-\`\`\`json
+<macrodata-detected-user>
 $USER_INFO
-\`\`\`
-
-Use this pre-detected info during onboarding instead of running detection scripts.
-</macrodata-local>"
+</macrodata-detected-user>
+</macrodata>"
     else
-        CONTEXT="<macrodata-local>
-## Identity
+        CONTEXT="<macrodata>
+<macrodata-identity>
+$(cat "$IDENTITY" 2>/dev/null || echo "_Not configured_")
+</macrodata-identity>
 
-$(cat "$IDENTITY" 2>/dev/null || echo "_No identity configured_")
-
-## Today
-
+<macrodata-today>
 $(cat "$TODAY" 2>/dev/null || echo "_Empty_")
+</macrodata-today>
 
-## Human
-
+<macrodata-human>
 $(cat "$HUMAN" 2>/dev/null || echo "_Empty_")
+</macrodata-human>
 
-## Workspace
-
+<macrodata-workspace>
 $(cat "$WORKSPACE" 2>/dev/null || echo "_Empty_")
+</macrodata-workspace>
 
-## Recent Journal
+<macrodata-journal>
 $(get_recent_journal 5)
+</macrodata-journal>
 
-## Schedules
+<macrodata-schedules>
 $(get_schedules)
+</macrodata-schedules>
 
+<macrodata-usage>
 $(get_usage)
+</macrodata-usage>
 
-## Paths
-
-Root: \`$STATE_ROOT\`
-
-### Files
+<macrodata-files root=\"$STATE_ROOT\">
 $(list_state_files)
-</macrodata-local>"
+</macrodata-files>
+</macrodata>"
     fi
 
     # Write to file for global CLAUDE.md reference
