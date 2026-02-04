@@ -55,6 +55,11 @@ Macrodata runs inside Claude Code's existing permission model. It uses only the 
 
 The daemon is a simple cron runner that spawns Claude Code when reminders fire. All state is local markdown files. Nothing phones home.
 
+## Requirements
+
+- This will likely only work on macOS and Linux systems. It may work with WSL on Windows, but this is untested.
+- Requires [Bun](https://bun.com/).
+
 ## Installation
 
 ### Claude Code
@@ -74,6 +79,10 @@ The daemon is a simple cron runner that spawns Claude Code when reminders fire. 
 ```
 
 Launch the app and ask to set up Macrodata.
+
+## Inspiration
+
+The layered memory architecture is inspired by [Letta](https://www.letta.com/), and particularly the [Void](https://cameron.stream/blog/void/) bot by Cameron Pfiffer. The ambient compute and dream time concepts are inspired by [Strix](https://timkellogg.me/blog/2025/12/15/strix) by Tim Kellogg. I first explored these ideas in my Acme agent, that I built in December 2025, and which continues to run and evolve on my Mac Mini. Acme built Innie, my first work agent, and Macrodata is these tools and ideas made available as a plugin for Claude Code and OpenCode.
 
 ## License
 
