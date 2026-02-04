@@ -137,19 +137,28 @@ list_state_files() {
         done
     fi
 
-    # Entity files
-    for subdir in people projects; do
-        if [ -d "$STATE_ROOT/entities/$subdir" ]; then
-            for f in "$STATE_ROOT/entities/$subdir"/*.md; do
-                [ -f "$f" ] && files="$files\n- entities/$subdir/$(basename "$f")"
+    # Entity files (scan all subdirs dynamically)
+    if [ -d "$STATE_ROOT/entities" ]; then
+        for subdir in "$STATE_ROOT/entities"/*/; do
+            [ -d "$subdir" ] || continue
+            local subdir_name=$(basename "$subdir")
+            for f in "$subdir"*.md; do
+                [ -f "$f" ] && files="$files\n- entities/$subdir_name/$(basename "$f")"
             done
-        fi
-    done
+        done
+    fi
 
     if [ -z "$files" ]; then
         echo "_No files yet_"
     else
         echo -e "$files"
+    fi
+}
+
+get_usage() {
+    local usage_file="$SCRIPT_DIR/../USAGE.md"
+    if [ -f "$usage_file" ]; then
+        cat "$usage_file"
     fi
 }
 
@@ -220,6 +229,8 @@ $(get_recent_journal 5)
 
 ## Schedules
 $(get_schedules)
+
+$(get_usage)
 
 ## Paths
 

@@ -218,16 +218,19 @@ Use this pre-detected info during onboarding instead of running detection script
       ? readdirSync(stateDir).filter(f => f.endsWith(".md")).map(f => `state/${f}`)
       : [];
 
-    // List entity files
+    // List entity files (scan all subdirs dynamically)
     const entitiesDir = join(stateRoot, "entities");
     const entityFiles: string[] = [];
     if (existsSync(entitiesDir)) {
-      for (const subdir of ["people", "projects"]) {
+      for (const subdir of readdirSync(entitiesDir)) {
         const dir = join(entitiesDir, subdir);
-        if (existsSync(dir)) {
+        try {
+          if (!existsSync(dir) || !readdirSync(dir)) continue;
           for (const f of readdirSync(dir).filter(f => f.endsWith(".md"))) {
             entityFiles.push(`entities/${subdir}/${f}`);
           }
+        } catch {
+          // Skip non-directories
         }
       }
     }
@@ -236,6 +239,14 @@ Use this pre-detected info during onboarding instead of running detection script
     const filesFormatted = allFiles.length > 0
       ? allFiles.map(f => `- ${f}`).join("\n")
       : "_No files yet_";
+
+    // Read usage from shared file
+    const usagePath = new URL("../USAGE.md", import.meta.url).pathname;
+    const usage = existsSync(usagePath) ? readFileSync(usagePath, "utf-8").trim() : "";
+
+    if (usage) {
+      sections.push(usage);
+    }
 
     sections.push(
       `## Paths
