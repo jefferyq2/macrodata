@@ -15,7 +15,7 @@ import { join } from "path";
 import { homedir } from "os";
 import { spawn } from "child_process";
 import { memoryTools } from "./tools.js";
-import { formatContextForPrompt, storeLastmod, checkFilesChanged, initializeStateRoot, getStateRoot } from "./context.js";
+import { formatContextForPrompt, consumePendingContext, initializeStateRoot, getStateRoot } from "./context.js";
 import { logger } from "./logger.js";
 
 
@@ -142,15 +142,27 @@ export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
   installSkills();
 
   return {
-    // Inject context on first message or when state files change
+    // Inject context on first message and any pending updates from daemon
     "chat.message": async (input, output) => {
       const isFirstMessage = !injectedSessions.has(input.sessionID);
-      const filesChanged = !isFirstMessage && checkFilesChanged(input.sessionID);
+      const pendingContext = consumePendingContext();
 
-      if (isFirstMessage || filesChanged) {
-        if (isFirstMessage) {
-          injectedSessions.add(input.sessionID);
-        }
+      // Inject pending context updates from daemon (schedule changes, state file updates)
+      if (pendingContext) {
+        const pendingPart: Part = {
+          id: `macrodata-pending-${Date.now()}`,
+          sessionID: input.sessionID,
+          messageID: output.message.id,
+          type: "text",
+          text: pendingContext,
+          synthetic: true,
+        };
+        output.parts.unshift(pendingPart);
+      }
+
+      // Inject full context on first message
+      if (isFirstMessage) {
+        injectedSessions.add(input.sessionID);
 
         try {
           const memoryContext = await formatContextForPrompt();
@@ -167,9 +179,6 @@ export const MacrodataPlugin: Plugin = async (_ctx: PluginInput) => {
 
             // Prepend context to message parts
             output.parts.unshift(contextPart);
-
-            // Store lastmod after successful injection
-            storeLastmod(input.sessionID);
           }
         } catch (err) {
           logger.error(`Context injection error: ${String(err)}`);

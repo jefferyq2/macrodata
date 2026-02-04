@@ -4,54 +4,26 @@
  * Reads state files and formats them for injection into conversations
  */
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, statSync } from "fs";
+import { existsSync, readFileSync, readdirSync, mkdirSync, unlinkSync } from "fs";
 
 import { join } from "path";
 import { getStateRoot, getJournalDir, getRemindersDir } from "../src/config.js";
 import { detectUser } from "../src/detect-user.js";
 
-// Track lastmod times per session
-const sessionLastmod = new Map<string, Record<string, number>>();
+/**
+ * Read and clear pending context from daemon
+ */
+export function consumePendingContext(): string | null {
+  const pendingPath = join(getStateRoot(), ".pending-context");
+  if (!existsSync(pendingPath)) return null;
 
-function getStateFilePaths(): string[] {
-  const stateRoot = getStateRoot();
-  return [
-    join(stateRoot, "state", "identity.md"),
-    join(stateRoot, "state", "today.md"),
-    join(stateRoot, "state", "human.md"),
-    join(stateRoot, "state", "workspace.md"),
-  ];
-}
-
-function getCurrentLastmod(): Record<string, number> {
-  const result: Record<string, number> = {};
-  for (const path of getStateFilePaths()) {
-    try {
-      if (existsSync(path)) {
-        result[path] = statSync(path).mtimeMs;
-      }
-    } catch {
-      // Ignore
-    }
+  try {
+    const content = readFileSync(pendingPath, "utf-8").trim();
+    unlinkSync(pendingPath);
+    return content || null;
+  } catch {
+    return null;
   }
-  return result;
-}
-
-export function storeLastmod(sessionId: string): void {
-  sessionLastmod.set(sessionId, getCurrentLastmod());
-}
-
-export function checkFilesChanged(sessionId: string): boolean {
-  const stored = sessionLastmod.get(sessionId);
-  if (!stored) return true; // No stored lastmod, treat as changed
-
-  const current = getCurrentLastmod();
-  for (const path of getStateFilePaths()) {
-    if (current[path] !== stored[path]) {
-      return true;
-    }
-  }
-  return false;
 }
 
 // Re-export for compatibility
